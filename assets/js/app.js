@@ -3,7 +3,6 @@ const DIR_DADOS = "data/";   // dados.json, municipios.json e uf/<ID_UF>.json
 const DIR_FONTE = "fonte/";  // planilha de origem (download)
 const LIMITE = 30;          // respostas mínimas para confiabilidade
 const LIMIAR_PP = 5;        // diferença destacada (pontos percentuais)
-const N_ATENCAO = 4;        // itens em cada lista de pontos de atenção
 const S = { mun: "var(--s-mun)", UF: "var(--s-rj)", BR: "var(--s-br)" };
 const MK = { mun: "", UF: "losango", BR: "menor" };   // forma do marcador em legendas e tooltips (design system: cor e forma)
 const NOME = { mun: "Município", get UF() { return `Estado (${ufAtual().sigla})`; }, BR: "Brasil" };
@@ -420,24 +419,43 @@ function renderResumo(ds) {
       <div class="val">${fmtPct(a.UF?.pct)}</div><div class="foot">${fmtInt(a.UF?.n_resp)} respostas</div></div>
     <div class="tile serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(a.BR?.pct)}</div><div class="foot">${fmtInt(a.BR?.n_resp)} respostas</div></div>
-    <div class="tile"><div class="lab">Descritores abaixo ${st.ref === "UF" ? "do estado" : "do Brasil"}</div>
-      <div class="val ${abaixo ? "delta-neg" : ""}">${lista.length ? abaixo : "–"}<span class="muted" style="font-size:16px;font-weight:500"> de ${lista.length}</span></div>
-      <div class="foot">diferença de ${LIMIAR_PP} pp ou mais</div></div>`;
+    <div class="tile"><div class="lab">Descritores × ${st.ref === "UF" ? "estado" : "Brasil"}</div>
+      <div class="val contagem">${lista.length
+        ? `<span class="delta-pos">${ic("sobe")}${acima}</span><span class="delta-neg">${ic("desce")}${abaixo}</span>` : "–"}</div>
+      <div class="blocos" aria-hidden="true">${[...lista].sort((x, y) => x.d.ordem - y.d.ordem).map(x =>
+        `<i class="${x.dif >= LIMIAR_PP ? "pos" : x.dif <= -LIMIAR_PP ? "neg" : ""}" title="${esc(x.d.cod)}: ${fmtPP(x.dif)}"></i>`).join("")}</div>
+      <div class="foot">acima e abaixo, ${LIMIAR_PP} pp ou mais, de ${lista.length} descritores</div></div>`;
 }
 
 /* ---------- 2. pontos de atenção ---------- */
+// Gráfico divergente único: diferença município − referência por descritor, em torno da linha da referência
 function renderAtencao(ds) {
-  const lista = difs(ds).filter(x => x.dif != null && !x.m.baixa);
-  const item = x => `<li><button type="button" data-cod="${esc(x.d.cod)}" title="${esc(x.d.descricao || "")}">
-      <span class="c">${esc(x.d.cod)}${x.d.n_itens === 1 ? `<span class="alerta" title="Descritor avaliado por um único item">${ic("alerta")}</span>` : ""}</span>
-      <span class="t">${esc(x.d.descricao || "(descrição não disponível)")}</span>
-      <span class="v ${x.dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(x.dif)}</span></button></li>`;
-  const neg = lista.filter(x => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, N_ATENCAO);
-  const pos = lista.filter(x => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, N_ATENCAO);
-  $("lst-neg").innerHTML = neg.length ? neg.map(item).join("") : `<li class="empty">Nenhum descritor abaixo da referência.</li>`;
-  $("lst-pos").innerHTML = pos.length ? pos.map(item).join("") : `<li class="empty">Nenhum descritor acima da referência.</li>`;
-  $("att-note").textContent = `Diferença em relação ao ${refNome()}, só com resultados de ${LIMITE} respostas ou mais.`;
-  document.querySelectorAll(".rank button").forEach(b => b.onclick = () => selecionar(b.dataset.cod));
+  const lista = difs(ds).filter(x => x.dif != null && !x.m.baixa).sort((a, b) => a.dif - b.dif);
+  $("att-note").textContent = `Diferença em relação ao ${refNome()}, em pp, só com resultados de ${LIMITE} respostas ou mais. Clique num descritor para ver o detalhe.`;
+  $("att-ref").textContent = st.ref === "UF" ? `Estado (${ufAtual().sigla})` : "Brasil";
+  document.querySelector("#v-painel .ref-cor").style.color = S[st.ref];
+  const box = $("att");
+  if (!lista.length) { box.innerHTML = `<p class="empty">Nenhum descritor com ${LIMITE} respostas ou mais no município.</p>`; return; }
+  const lim = Math.max(10, Math.ceil(Math.max(...lista.map(x => Math.abs(x.dif))) / 5) * 5);   // escala simétrica, de 5 em 5 pp
+  const pos = v => 50 + (v / lim) * 50;                                                          // pp → % da largura da trilha
+  const faixa = `left:${pos(-LIMIAR_PP)}%;width:${pos(LIMIAR_PP) - pos(-LIMIAR_PP)}%`;
+  box.style.setProperty("--ref", S[st.ref]);
+  box.innerHTML = `<div class="dv-eixo" aria-hidden="true"><span></span><span></span>
+      <div class="dv-trilha"><b style="left:0">−${lim} pp</b><b style="left:${pos(-LIMIAR_PP)}%">−${LIMIAR_PP}</b><b style="left:50%">0</b>
+        <b style="left:${pos(LIMIAR_PP)}%">+${LIMIAR_PP}</b><b style="left:100%">+${lim} pp</b></div><span></span></div>` +
+    lista.map(x => {
+      const forte = Math.abs(x.dif) >= LIMIAR_PP;
+      const barra = x.dif < 0 ? `left:${pos(x.dif)}%;width:${50 - pos(x.dif)}%` : `left:50%;width:${pos(x.dif) - 50}%`;
+      const desc = x.d.descricao || "(descrição não disponível)";
+      return `<button type="button" class="dv-linha${st.desc === x.d.cod ? " sel" : ""}" role="listitem" data-cod="${esc(x.d.cod)}"
+          aria-label="${esc(x.d.cod)}: ${esc(desc)}. ${fmtPP(x.dif)} em relação ao ${refNome()}.">
+        <span class="c">${esc(x.d.cod)}${x.d.n_itens === 1 ? `<span class="alerta" title="Descritor avaliado por um único item">${ic("alerta")}</span>` : ""}</span>
+        <span class="t">${esc(desc)}</span>
+        <span class="dv-trilha"><i class="dv-faixa" style="${faixa}"></i><i class="dv-barra${forte ? " forte" : ""} ${x.dif < 0 ? "neg" : "pos"}" style="${barra}"></i></span>
+        <span class="v ${forte ? (x.dif < 0 ? "delta-neg" : "delta-pos") : ""}">${forte ? ic(x.dif < 0 ? "desce" : "sobe") : ""}${fmtPP(x.dif)}</span>
+      </button>`;
+    }).join("");
+  box.querySelectorAll(".dv-linha").forEach(b => b.onclick = () => selecionar(b.dataset.cod));
 }
 
 /* ---------- 3. tópicos ---------- */

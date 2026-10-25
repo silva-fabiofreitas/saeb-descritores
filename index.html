@@ -93,9 +93,16 @@
     <!-- 2. Pontos de atenção -->
     <div class="section-title"><span class="num">1</span><h2>Pontos de atenção</h2>
       <p class="note" id="att-note"></p></div>
-    <section class="split" aria-label="Pontos de atenção">
-      <div class="list-card neg"><h3><svg class="ic" aria-hidden="true"><use href="#i-desce"/></svg>Mais abaixo da referência</h3><ul class="rank" id="lst-neg"></ul></div>
-      <div class="list-card pos"><h3><svg class="ic" aria-hidden="true"><use href="#i-sobe"/></svg>Mais acima da referência</h3><ul class="rank" id="lst-pos"></ul></div>
+    <section class="card" aria-label="Pontos de atenção">
+      <div class="card-head" style="margin-bottom:8px">
+        <div class="legend" aria-hidden="true">
+          <span><i class="barra" style="background:var(--s-mun)"></i>Diferença de 5 pp ou mais</span>
+          <span><i class="barra" style="background:var(--seq-2)"></i>Menos de 5 pp</span>
+          <span><i class="barra" style="background:var(--surface-2);outline:1px solid var(--axis)"></i>Faixa de ±5 pp</span>
+          <span><b class="ref-cor">┆</b>&nbsp;<span id="att-ref">Estado</span></span>
+        </div>
+      </div>
+      <div class="dv" id="att" role="list"></div>
     </section>
 
     <!-- 3. Tópicos -->

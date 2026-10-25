@@ -24,6 +24,7 @@
   --header-2: #0f4150;
   --header-line: #2f5a66;
   --header-text: #b5d0d6;
+  --seq-2: #6fb0c2;
   --section-num: #0b3340;
   --s-rj:  #e07b24;
   --s-br:  #6b7c93;
@@ -43,7 +44,7 @@
     --ink: #ebeff2; --ink-2: #b9bec6; --muted: #8e929b;
     --s-mun: #4aa8c2; --s-mun-hover: #7cc3d6; --on-caneta: #0d0f15; --chip: #2f8aa3;
     --header: #0a1e25; --header-2: #10303a; --header-line: #24434d; --header-text: #a9c4ca;
-    --section-num: #2f8aa3;   /* no escuro o petróleo do cabeçalho some no fundo: usa caneta-chip */
+    --section-num: #2f8aa3; --seq-2: #1d6378;   /* no escuro o petróleo do cabeçalho some no fundo: usa caneta-chip */
     --s-rj: #e38a3e; --s-br: #8e9bb0; --marca: #e6dd5a;
     --good: #4aa8c2; --bad: #f08a5d; --warning-ink: #f7b83d;
     --accent-wash: rgba(74,168,194,0.14);
@@ -57,7 +58,7 @@
   --ink: #ebeff2; --ink-2: #b9bec6; --muted: #8e929b;
   --s-mun: #4aa8c2; --s-mun-hover: #7cc3d6; --on-caneta: #0d0f15; --chip: #2f8aa3;
   --header: #0a1e25; --header-2: #10303a; --header-line: #24434d; --header-text: #a9c4ca;
-    --section-num: #2f8aa3;   /* no escuro o petróleo do cabeçalho some no fundo: usa caneta-chip */
+    --section-num: #2f8aa3; --seq-2: #1d6378;   /* no escuro o petróleo do cabeçalho some no fundo: usa caneta-chip */
   --s-rj: #e38a3e; --s-br: #8e9bb0; --marca: #e6dd5a;
   --good: #4aa8c2; --bad: #f08a5d; --warning-ink: #f7b83d;
   --accent-wash: rgba(74,168,194,0.14);
@@ -197,12 +198,42 @@ i.menor { transform: scale(.8); }
 .delta-pos { color: var(--good); }
 
 /* ---------- 2. pontos de atenção ---------- */
-.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.list-card { border-radius: 14px; padding: 14px 16px; border: 1px solid var(--border); background: var(--surface); }
-.list-card h3, .detail h3.delta-neg, .detail h3.delta-pos { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+/* gráfico divergente: código | nome (quebra linha) | trilha com faixa de ±5 pp e linha da referência | valor */
+.dv { display: grid; }
+.dv-linha, .dv-eixo { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(180px, 38%) 92px; gap: 6px 14px; align-items: center; }
+.dv-linha {
+  all: unset; box-sizing: border-box; display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(180px, 38%) 92px;
+  gap: 6px 14px; align-items: center; padding: 8px 6px; border-radius: 6px; cursor: pointer; border-top: 1px solid var(--grid);
+}
+.dv-linha:hover, .dv-linha:focus-visible, .dv-linha.sel { background: var(--accent-wash); }
+.dv-linha:focus-visible { outline: 2px solid var(--s-mun); outline-offset: -2px; }
+.dv-linha .c { font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+.dv-linha .t { color: var(--ink-2); font-size: 14px; line-height: 1.4; }
+.dv-linha .v { font-weight: 800; text-align: right; white-space: nowrap; display: inline-flex; justify-content: flex-end; align-items: center; gap: 3px; }
+.dv-linha .v .ic { width: 13px; height: 13px; stroke-width: 2.6; }
+.dv-trilha { position: relative; height: 22px; }
+.dv-trilha::after { content: ""; position: absolute; left: 50%; top: -6px; bottom: -6px; border-left: 2px solid var(--ref, var(--s-rj)); }
+.dv-faixa { position: absolute; top: 0; bottom: 0; background: var(--surface-2); }
+.dv-barra { position: absolute; top: 5px; height: 12px; background: var(--seq-2); }
+.dv-barra.forte { background: var(--s-mun); }
+.dv-barra.pos { border-radius: 0 4px 4px 0; }
+.dv-barra.neg { border-radius: 4px 0 0 4px; }
+.dv-eixo .dv-trilha { height: 18px; }
+.dv-eixo .dv-trilha::after { display: none; }
+.dv-eixo b { position: absolute; transform: translateX(-50%); font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.dv-eixo b:first-child { transform: none; }
+.dv-eixo b:last-child { transform: translateX(-100%); }
+.legend i.barra { width: 16px; height: 10px; border-radius: 3px; }
+/* cartão de contagem: acima / abaixo e uma faixa com um bloco por descritor */
+.tile .val.contagem { display: flex; gap: 16px; }
+.tile .val.contagem span { display: inline-flex; align-items: center; gap: 4px; }
+.tile .val.contagem .ic { width: 22px; height: 22px; stroke-width: 2.6; }
+.blocos { display: flex; gap: 2px; margin: 8px 0 4px; }
+.blocos i { flex: 1; height: 10px; border-radius: 2px; background: var(--surface-2); }
+.blocos i.pos { background: var(--s-mun); }
+.blocos i.neg { background: var(--bad); }
+.detail h3.delta-neg, .detail h3.delta-pos { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
 .detail h3.delta-neg, .detail h3.delta-pos { margin-top: 16px; }
-.list-card.neg h3 { color: var(--bad); }
-.list-card.pos h3 { color: var(--good); }
 .rank { list-style: none; margin: 0; padding: 0; }
 .rank li + li { border-top: 1px solid var(--grid); }
 .rank button {
@@ -346,7 +377,10 @@ footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--border
   .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 760px) {
-  .split { grid-template-columns: 1fr; }
+  .dv-linha { grid-template-columns: 52px minmax(0, 1fr) 76px; grid-template-areas: "c t t" "g g v"; }
+  .dv-linha .c { grid-area: c; } .dv-linha .t { grid-area: t; } .dv-linha .dv-trilha { grid-area: g; } .dv-linha .v { grid-area: v; }
+  .dv-eixo { grid-template-columns: minmax(0, 1fr) 76px; padding: 0 6px; }
+  .dv-eixo > span { display: none; }
   .tile .val { font-size: 26px; }
   .tile.main .val { font-size: 40px; }
   h1, .brand h1 { font-size: 17px; }
