@@ -175,14 +175,26 @@ i.losango { border-radius: 1.5px !important; transform: rotate(45deg) scale(.82)
 i.menor { transform: scale(.8); }
 
 /* ---------- 1. resumo ---------- */
-.headline { font-size: 17px; line-height: 1.45; margin: 0 0 14px; max-width: 70ch; }
-.headline b { font-weight: 700; }
 .tiles { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 12px; }
+/* painel: cartão do município à esquerda (2 linhas), estado e Brasil em cima, contagem embaixo */
+.tiles.resumo { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
+.tiles.resumo .tile.destaque { grid-row: span 2; padding: 22px 24px; }
+.tiles.resumo .tile.conta { grid-column: span 2; }
+/* cartão em destaque (layout): rótulo em caixa alta, número grande com pílulas, frase-resumo, rodapé.
+   No painel é o município (cores de .tile.main); na aba Estados é o Brasil, em superfície com a barra da série. */
+.tile.destaque .lab { text-transform: uppercase; letter-spacing: .04em; font-size: 12px; font-weight: 700; }
+.tile.destaque .val { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 6px 0 12px;
+                      font-size: 56px; line-height: 1; letter-spacing: -0.03em; }
+.tile.destaque .pills { display: inline-flex; flex-wrap: wrap; gap: 8px; letter-spacing: 0; }
+.tile.destaque .pill { margin: 0; vertical-align: 0; display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; font-size: 14px; }
+.tile.destaque .pill .ic { width: 13px; height: 13px; stroke-width: 2.8; }
+.tile.destaque .frase { font-size: 15px; line-height: 1.5; margin: 0 0 10px; max-width: 62ch; color: var(--ink-2); }
+.tile.main .pill.chip { background: var(--chip); color: #ffffff; }
+.tile.main .frase { color: var(--on-caneta); }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
 .tile.main { background: var(--s-mun); border-color: var(--s-mun); color: var(--on-caneta); }
 .tile.main .lab, .tile.main .foot { color: var(--on-caneta); opacity: .85; }
 .tile.main .lab i { background: var(--on-caneta) !important; }
-.tile.main .val { font-size: 56px; line-height: 1; letter-spacing: -0.03em; }
 .tile.main .pill { background: var(--on-caneta); color: var(--s-mun); }
 .tile.main .pill.neg { color: var(--bad); }
 .tile.serie-uf { box-shadow: inset 0 6px 0 var(--s-rj); padding-top: 20px; }
@@ -383,6 +395,8 @@ footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--border
   .desc-grid { grid-template-columns: minmax(0, 1fr); }
   .detail { position: static; }
   .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .tiles.resumo { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .tiles.resumo .tile.destaque { grid-row: auto; grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   .dv-linha { grid-template-columns: 52px minmax(0, 1fr) 76px; grid-template-areas: "c t t" "g g v"; }
@@ -390,13 +404,12 @@ footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--border
   .dv-eixo { grid-template-columns: minmax(0, 1fr) 76px; padding: 0 6px; }
   .dv-eixo > span { display: none; }
   .tile .val { font-size: 26px; }
-  .tile.main .val { font-size: 40px; }
+  .tile.destaque .val { font-size: 40px; }
   h1, .brand h1 { font-size: 17px; }
   .brand { flex-direction: column; align-items: flex-start; gap: 10px; }
   .brand .logo img { height: 26px; }
   .brand .titulo { border-left: 0; padding-left: 0; }
   .filters { position: static; }
   .section-title .note { display: none; }
-  .headline { font-size: 15.5px; }
   .ec-map { height: 400px; }
 }

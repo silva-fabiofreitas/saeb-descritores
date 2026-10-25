@@ -435,31 +435,45 @@ function dotPlot(container, rows, opts) {
 function renderResumo(ds) {
   const cods = ds.map(d => d.cod);
   const a = { mun: agreg("mun", cods), UF: agreg("UF", cods), BR: agreg("BR", cods) };
-  const dif = a.mun && a[st.ref] ? (a.mun.pct - a[st.ref].pct) * 100 : null;
-  const cls = dif == null ? "" : dif <= -LIMIAR_PP ? "neg" : dif >= LIMIAR_PP ? "pos" : "";
   const disc = DISC_NOME[st.disc];
   const rede = st.rede === "Pública" ? "na rede pública" : "em todas as redes";
 
-  // frase-resumo
+  // frase-resumo (vai dentro do cartão do município)
   const lista = difs(ds).filter(x => x.dif != null && !x.m.baixa);
   const abaixo = lista.filter(x => x.dif <= -LIMIAR_PP).length;
   const acima = lista.filter(x => x.dif >= LIMIAR_PP).length;
-  const comp = dif == null ? "" : Math.abs(dif) < 0.5 ? `praticamente igual ao ${refNome()}`
-    : `<b class="${dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(Math.abs(dif)).replace("+", "")} ${dif < 0 ? "abaixo" : "acima"}</b> do ${refNome()}`;
-  $("headline").innerHTML = a.mun
-    ? `Em <b>${disc}</b>, ${rede}, os alunos de <b>${esc(nomeMun(st.mun))}</b> acertaram <b>${fmtPct(a.mun.pct)}</b> das questões, ` +
-      `${comp}. ${lista.length ? `Em <b>${abaixo}</b> de ${lista.length} descritores o município fica ${LIMIAR_PP} pp ou mais abaixo; em <b>${acima}</b>, ${LIMIAR_PP} pp ou mais acima.` : ""}`
+  const difUF = a.mun && a.UF ? (a.mun.pct - a.UF.pct) * 100 : null;
+  const difBR = a.mun && a.BR ? (a.mun.pct - a.BR.pct) * 100 : null;
+  const rel = d => d == null ? null : Math.abs(d) < 0.5 ? "igual" : d > 0 ? "mais" : "menos";
+  const rU = rel(difUF), rB = rel(difBR);
+  const comp = rU === rB
+    ? (rU === "igual" ? "acerta praticamente o mesmo que o estado e o país" : `acerta ${rU} que o estado e o país`)
+    : [rU && (rU === "igual" ? "praticamente o mesmo que o estado" : `${rU} que o estado`),
+       rB && (rB === "igual" ? "praticamente o mesmo que o país" : `${rB} que o país`)].filter(Boolean).join(" e ").replace(/^/, "acerta ");
+  // a primeira contagem leva o substantivo ("1 descritor fica"); a segunda, não ("1 fica")
+  const qtd = (n, txt, subst) => n === 0 ? `${subst ? "nenhum descritor" : "nenhum"} fica ${txt}`
+    : n === 1 ? `1${subst ? " descritor" : ""} fica ${txt}` : `${n}${subst ? " descritores" : ""} ficam ${txt}`;
+  const frase = a.mun
+    ? `Em ${disc}, ${rede}, o município ${comp}.` + (lista.length
+      ? ` ${(s => s[0].toUpperCase() + s.slice(1))(qtd(abaixo, `${LIMIAR_PP} pp ou mais abaixo do ${refCurto()}`, true))}; ` +
+        `${qtd(acima, `${LIMIAR_PP} pp ou mais acima`, false)}.` : "")
     : `Sem dados de ${disc} ${rede} para ${esc(nomeMun(st.mun))}.`;
+  const pilula = (d, nome, chip) => d == null ? "" :
+    `<span class="pill${chip ? " chip" : ""}${!chip && d <= -LIMIAR_PP ? " neg" : ""}">${Math.abs(d) >= 0.05 ? ic(d < 0 ? "desce" : "sobe") : ""}${fmtPP(d)} vs ${nome}</span>`;
+  const outra = st.ref === "UF" ? "BR" : "UF";
+  const nomeRef = n => n === "UF" ? ufAtual().sigla : "Brasil";
+  const difDe = n => n === "UF" ? difUF : difBR;
 
   $("tiles").innerHTML = `
-    <div class="tile main"><div class="lab"><i style="background:var(--s-mun)"></i>Município · acerto geral</div>
-      <div class="val">${fmtPct(a.mun?.pct)}${dif == null ? "" : `<span class="pill ${cls}">${fmtPP(dif)} × ${refCurto()}</span>`}</div>
-      <div class="foot">${fmtInt(a.mun?.n_resp)} respostas · ${disc}</div></div>
+    <div class="tile main destaque"><div class="lab"><i style="background:var(--s-mun)"></i>Município · acerto geral</div>
+      <div class="val">${fmtPct(a.mun?.pct)}<span class="pills">${pilula(difDe(st.ref), nomeRef(st.ref), false)}${pilula(difDe(outra), nomeRef(outra), true)}</span></div>
+      <p class="frase">${frase}</p>
+      <div class="foot">${fmtInt(a.mun?.n_resp)} respostas</div></div>
     <div class="tile serie-uf"><div class="lab"><i class="losango" style="background:var(--s-rj)"></i>${esc(ufAtual().nome)}</div>
       <div class="val">${fmtPct(a.UF?.pct)}</div><div class="foot">${fmtInt(a.UF?.n_resp)} respostas</div></div>
     <div class="tile serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(a.BR?.pct)}</div><div class="foot">${fmtInt(a.BR?.n_resp)} respostas</div></div>
-    <div class="tile"><div class="lab">Descritores × ${st.ref === "UF" ? "estado" : "Brasil"}</div>
+    <div class="tile conta"><div class="lab">Descritores × ${st.ref === "UF" ? "estado" : "Brasil"}</div>
       <div class="val contagem">${lista.length
         ? `<span class="delta-pos">${ic("sobe")}${acima}</span><span class="delta-neg">${ic("desce")}${abaixo}</span>` : "–"}</div>
       <div class="blocos" aria-hidden="true">${[...lista].sort((x, y) => x.d.ordem - y.d.ordem).map(x =>
@@ -838,23 +852,28 @@ function renderResumoEstados(L, br, ind) {
   const max = L[0], min = L[L.length - 1];
   const abaixo = L.filter(r => r.dif <= -LIMIAR_PP).length, acima = L.filter(r => r.dif >= LIMIAR_PP).length;
   const rede = st.rede === "Pública" ? "na rede pública" : "em todas as redes";
-  const oque = ind.tipo === "geral" ? `o acerto geral em <b>${DISC_NOME[st.disc]}</b>`
-    : ind.tipo === "tópico" ? `o acerto no tópico <b>${esc(ind.curto)}</b> (${DISC_NOME[st.disc]})`
-    : `o acerto no descritor <b>${esc(ind.d.cod)}</b> (${DISC_NOME[st.disc]})`;
-  $("e-headline").innerHTML =
-    `${oque[0].toUpperCase() + oque.slice(1)}, ${rede}, vai de <b>${fmtPct(min.pct)}</b> (${esc(min.u.nome)}) a <b>${fmtPct(max.pct)}</b> (${esc(max.u.nome)}); ` +
-    `o Brasil fica em <b>${fmtPct(br?.pct)}</b>. <b class="delta-neg">${abaixo}</b> ${abaixo === 1 ? "estado fica" : "estados ficam"} ${LIMIAR_PP} pp ou mais abaixo do Brasil ` +
-    `e <b class="delta-pos">${acima}</b>, ${LIMIAR_PP} pp ou mais acima.`;
+  const oque = ind.tipo === "geral" ? `o acerto geral em ${DISC_NOME[st.disc]}`
+    : ind.tipo === "tópico" ? `o acerto no tópico ${esc(ind.curto)} (${DISC_NOME[st.disc]})`
+    : `o acerto no descritor ${esc(ind.d.cod)} (${DISC_NOME[st.disc]})`;
+  const estados = (n, txt, subst) => n === 0 ? `${subst ? "nenhum estado" : "nenhum"} fica ${txt}`
+    : n === 1 ? `1${subst ? " estado" : ""} fica ${txt}` : `${n}${subst ? " estados" : ""} ficam ${txt}`;
+  const frase = `${oque[0].toUpperCase() + oque.slice(1)}, ${rede}, vai de ${fmtPct(min.pct)} (${esc(min.u.nome)}) a ` +
+    `${fmtPct(max.pct)} (${esc(max.u.nome)}). ${(s => s[0].toUpperCase() + s.slice(1))(estados(abaixo, `${LIMIAR_PP} pp ou mais abaixo do Brasil`, true))}; ` +
+    `${estados(acima, `${LIMIAR_PP} pp ou mais acima`, false)}.`;
   $("e-tiles").innerHTML = `
-    <div class="tile serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil</div>
-      <div class="val">${fmtPct(br?.pct)}</div><div class="foot">${fmtInt(br?.n_resp)} respostas</div></div>
+    <div class="tile destaque serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil · ${ind.tipo === "geral" ? "acerto geral" : esc(ind.curto)}</div>
+      <div class="val">${fmtPct(br?.pct)}<span class="pills">
+        <span class="pill${abaixo ? " neg" : ""}">${ic("desce")}${abaixo} ${abaixo === 1 ? "estado" : "estados"} abaixo</span>
+        <span class="pill${acima ? " pos" : ""}">${ic("sobe")}${acima} acima</span></span></div>
+      <p class="frase">${frase}</p>
+      <div class="foot">${fmtInt(br?.n_resp)} respostas</div></div>
     <div class="tile"><div class="lab">Maior acerto</div>
       <div class="val">${fmtPct(max.pct)}</div><div class="foot">${esc(max.u.nome)} · ${fmtPP(max.dif)} × Brasil</div></div>
     <div class="tile"><div class="lab">Menor acerto</div>
       <div class="val">${fmtPct(min.pct)}</div><div class="foot">${esc(min.u.nome)} · ${fmtPP(min.dif)} × Brasil</div></div>
-    <div class="tile"><div class="lab">Distância entre o maior e o menor</div>
+    <div class="tile conta"><div class="lab">Distância entre o maior e o menor</div>
       <div class="val">${fmtNum((max.pct - min.pct) * 100, 1)}<span class="muted" style="font-size:16px;font-weight:500"> pp</span></div>
-      <div class="foot">pontos percentuais</div></div>`;
+      <div class="foot">pontos percentuais, de ${esc(min.u.nome)} a ${esc(max.u.nome)}</div></div>`;
 }
 
 function renderMapa(L, br, ind, F, T) {
