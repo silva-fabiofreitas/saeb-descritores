@@ -24,6 +24,12 @@ const ufAtual = () => D.ufs.find(u => u.id === st.uf) || { id: st.uf, sigla: "?"
 const refNome = () => st.ref === "UF" ? `estado (${ufAtual().sigla})` : "Brasil";
 const refCurto = () => st.ref === "UF" ? ufAtual().sigla : "Brasil";
 const $ = id => document.getElementById(id);
+const ic = nome => `<svg class="ic" aria-hidden="true"><use href="#i-${nome}"/></svg>`;   // ícones do sprite em index.html
+function mostrarErro(html) {
+  const el = $("erro");
+  el.style.display = "flex";
+  el.innerHTML = `${ic("alerta")}<div>${html}</div>`;
+}
 
 function ordemDesc(cod) {           // D1..D28 em ordem numérica; BNCC depois
   const m = /^D(\d+)$/.exec(cod);
@@ -37,11 +43,9 @@ async function carregar() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     D = await r.json();
   } catch (e) {
-    const el = $("erro");
-    el.style.display = "block";
-    el.innerHTML = `<b>Não foi possível ler <code>${DIR_DADOS}dados.json</code>.</b> ${esc(e.message)}<br>
+    mostrarErro(`<b>Não foi possível ler <code>${DIR_DADOS}dados.json</code>.</b> ${esc(e.message)}<br>
       Se você abriu o arquivo com duplo clique, o navegador bloqueia a leitura. Publique a pasta no GitHub Pages
-      ou rode <code>python -m http.server</code> dentro dela e acesse <code>http://localhost:8000</code>.`;
+      ou rode <code>python -m http.server</code> dentro dela e acesse <code>http://localhost:8000</code>.`);
     return;
   }
   try {   // nomes opcionais: {"6325345": "Nome do município"}
@@ -78,9 +82,7 @@ async function carregarUF(id) {
       }
       UF_CACHE[id] = Object.values(info).sort((a, b) => b.alunos - a.alunos);
     } catch (e) {
-      const el = $("erro");
-      el.style.display = "block";
-      el.innerHTML = `<b>Não foi possível ler <code>${DIR_DADOS}uf/${id}.json</code>.</b> ${esc(e.message)}`;
+      mostrarErro(`<b>Não foi possível ler <code>${DIR_DADOS}uf/${id}.json</code>.</b> ${esc(e.message)}`);
       UF_CACHE[id] = null;
     } finally {
       sel.disabled = false;
@@ -296,6 +298,12 @@ function el(tag, attrs = {}, parent) {
   if (parent) parent.appendChild(n);
   return n;
 }
+let CTX_MEDIDA;
+function medirTexto(txt, fonte) {
+  CTX_MEDIDA ||= document.createElement("canvas").getContext("2d");
+  CTX_MEDIDA.font = fonte;
+  return CTX_MEDIDA.measureText(txt).width;
+}
 function dotPlot(container, rows, opts) {
   // rows: [{tipo:"cab", label} | {tipo:"lin", id, label, sub, warn, vals:{mun,UF,BR}, tip}]
   container.innerHTML = "";
@@ -340,7 +348,10 @@ function dotPlot(container, rows, opts) {
     const lab = el("text", { x: 4, y: stack ? y + 15 : cy + 4 }, svg);
     if (r.code) {
       const c = el("tspan", { class: "code" }, lab); c.textContent = r.code;
-      if (r.warn) { const w = el("tspan", { class: "warn", dx: 3 }, lab); w.textContent = "!"; }
+      if (r.warn) {     // ícone de alerta logo depois do código (largura medida na fonte da página)
+        const fonte = `600 12px ${getComputedStyle(document.body).fontFamily}`;
+        el("use", { href: "#i-alerta", x: 4 + medirTexto(r.code, fonte) + 4, y: (stack ? y + 15 : cy + 4) - 10, width: 11, height: 11, class: "warn-ic" }, svg);
+      }
       if (!narrow && r.label) {
         const maxCh = Math.floor((labW - 56) / 6.4);
         const s = el("tspan", { x: 52 }, lab);
@@ -397,9 +408,9 @@ function renderResumo(ds) {
     <div class="tile main"><div class="lab"><i style="background:var(--s-mun)"></i>Município · acerto geral</div>
       <div class="val">${fmtPct(a.mun?.pct)}${dif == null ? "" : `<span class="pill ${cls}">${fmtPP(dif)} × ${refCurto()}</span>`}</div>
       <div class="foot">${fmtInt(a.mun?.n_resp)} respostas · ${disc}</div></div>
-    <div class="tile"><div class="lab"><i style="background:var(--s-rj)"></i>${esc(ufAtual().nome)}</div>
+    <div class="tile serie-uf"><div class="lab"><i style="background:var(--s-rj)"></i>${esc(ufAtual().nome)}</div>
       <div class="val">${fmtPct(a.UF?.pct)}</div><div class="foot">${fmtInt(a.UF?.n_resp)} respostas</div></div>
-    <div class="tile"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
+    <div class="tile serie-br"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(a.BR?.pct)}</div><div class="foot">${fmtInt(a.BR?.n_resp)} respostas</div></div>
     <div class="tile"><div class="lab">Descritores abaixo ${st.ref === "UF" ? "do estado" : "do Brasil"}</div>
       <div class="val ${abaixo ? "delta-neg" : ""}">${lista.length ? abaixo : "–"}<span class="muted" style="font-size:16px;font-weight:500"> de ${lista.length}</span></div>
@@ -410,7 +421,7 @@ function renderResumo(ds) {
 function renderAtencao(ds) {
   const lista = difs(ds).filter(x => x.dif != null && !x.m.baixa);
   const item = x => `<li><button type="button" data-cod="${esc(x.d.cod)}" title="${esc(x.d.descricao || "")}">
-      <span class="c">${esc(x.d.cod)}${x.d.n_itens === 1 ? '<b style="color:var(--warning-ink)"> !</b>' : ""}</span>
+      <span class="c">${esc(x.d.cod)}${x.d.n_itens === 1 ? `<span class="alerta" title="Descritor avaliado por um único item">${ic("alerta")}</span>` : ""}</span>
       <span class="t">${esc(x.d.descricao || "(descrição não disponível)")}</span>
       <span class="v ${x.dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(x.dif)}</span></button></li>`;
   const neg = lista.filter(x => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, N_ATENCAO);
@@ -469,9 +480,9 @@ function renderDetalhe(ds) {
   const v = { mun: val("mun", d.cod), UF: val("UF", d.cod), BR: val("BR", d.cod) };
   const ref = v[st.ref];
   const dif = v.mun && ref ? (v.mun.pct - ref.pct) * 100 : null;
-  const badges = (d.n_itens === 1 ? `<span class="badge warn">1 item</span>` : `<span class="badge">${d.n_itens} itens</span>`) +
+  const badges = (d.n_itens === 1 ? `<span class="badge warn" title="Descritor avaliado por um único item: o resultado reflete aquela questão">${ic("alerta")}1 item</span>` : `<span class="badge">${d.n_itens} itens</span>`) +
                  (d.matriz === "BNCC" ? ` <span class="badge">BNCC</span>` : "") +
-                 (v.mun?.baixa ? ` <span class="badge warn">&lt; ${LIMITE} resp.</span>` : "");
+                 (v.mun?.baixa ? ` <span class="badge warn" title="Menos de ${LIMITE} respostas: ler com muita cautela">${ic("alerta")}&lt; ${LIMITE} resp.</span>` : "");
   $("dt-cod").innerHTML = `${esc(d.cod)} ${badges}`;
   $("dt-desc").textContent = d.descricao || "(descrição não disponível na Matriz de 2001)";
   $("dt-top").textContent = d.topico;
@@ -572,11 +583,11 @@ function renderTabela(ds) {
   }).join("");
   const tb = linhas.map(r => {
     const st_ = r.dif == null ? "" : r.dif <= -LIMIAR_PP
-      ? `<span class="status delta-neg">▼ ${fmtPP(r.dif)}</span>`
-      : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">▲ ${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
-    const badges = (r.n_itens === 1 ? ` <span class="badge warn">1 item</span>` : "") +
+      ? `<span class="status delta-neg">${ic("desce")}${fmtPP(r.dif)}</span>`
+      : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">${ic("sobe")}${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
+    const badges = (r.n_itens === 1 ? ` <span class="badge warn" title="Descritor avaliado por um único item: o resultado reflete aquela questão">${ic("alerta")}1 item</span>` : "") +
                    (r.d.matriz === "BNCC" ? ` <span class="badge">BNCC</span>` : "") +
-                   (r.baixa ? ` <span class="badge warn">&lt; ${LIMITE} resp.</span>` : "");
+                   (r.baixa ? ` <span class="badge warn" title="Menos de ${LIMITE} respostas: ler com muita cautela">${ic("alerta")}&lt; ${LIMITE} resp.</span>` : "");
     return `<tr data-cod="${esc(r.cod)}" class="${st.desc === r.cod ? "sel" : ""}">
       <td><b>${esc(r.cod)}</b>${badges}</td>
       <td class="desc">${esc(r.d.descricao || "(não disponível)")}<div class="muted" style="font-size:12px">${esc(r.topico)}</div></td>
@@ -620,9 +631,7 @@ function prepararEstados() {
     echarts.registerMap("BR", G);
   })().catch(e => {
     EC_PRONTO = null;
-    const el = $("erro");
-    el.style.display = "block";
-    el.innerHTML = `<b>O mapa não pôde ser montado:</b> ${esc(e.message)}`;
+    mostrarErro(`<b>O mapa não pôde ser montado:</b> ${esc(e.message)}`);
     throw e;
   });
 }
@@ -632,19 +641,19 @@ function grafico(id) {
   return (EC[id] = echarts.init(box, null, { renderer: "svg" }));
 }
 
-// Paletas: sequencial (azul, 5 faixas) e divergente (vermelho ↔ azul, cinza no meio, 7 faixas)
+// Paletas do design system (seq-1..5, div-1..7): sequencial em petróleo e divergente ferrugem ↔ petróleo, cinza no meio
 function paletas() {
   return escuro()
-    ? { seq: ["#1e3976", "#2e54ae", "#4573de", "#7ba3f6", "#bad1ff"],
-        div: ["#fb988d", "#d15c53", "#7a342e", "#33353b", "#2d4a88", "#5381e6", "#a7c4ff"] }
-    : { seq: ["#a0bef9", "#6b95ee", "#3567de", "#1f48ae", "#112e77"],
-        div: ["#972622", "#d24d45", "#edaaa2", "#d8dbdf", "#a4bef2", "#4a7ae4", "#183d9c"] };
+    ? { seq: ["#12404e", "#1d6378", "#3a8ba3", "#7dc0d2", "#bfe3ec"],
+        div: ["#f4a57e", "#c9692e", "#6e3a1f", "#33353b", "#1e5566", "#3e97b0", "#a6dce9"] }
+    : { seq: ["#a9d3de", "#6fb0c2", "#3a8ba3", "#0e5a73", "#08394a"],
+        div: ["#8a3410", "#c2571e", "#edb48f", "#d8dbdf", "#9ccad6", "#2f849e", "#0b4558"] };
 }
 // texto legível sobre a cor de fundo
 function tinta(hex) {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32 ? "#0b0b0b" : "#ffffff";
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32 ? "#0f1e33" : "#ffffff";
 }
 const fmtNum = (v, d = 0) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -705,7 +714,10 @@ async function renderEstados() {
   $("e-ind").value = st.ind;
   gravarURL(); renderRodape();
   if (!window.echarts || !EC_PRONTO) {
-    for (const id of ["e-mapa", "e-rank", "e-heat"]) { $(id).classList.add("ec-loading"); $(id).textContent = "Carregando o mapa…"; }
+    for (const id of ["e-mapa", "e-rank", "e-heat"]) {
+      $(id).classList.add("ec-loading");
+      $(id).innerHTML = `<span class="gabarito" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span role="status">Carregando o mapa…</span>`;
+    }
     try { await prepararEstados(); } catch (_) {
       for (const id of ["e-mapa", "e-rank", "e-heat"]) $(id).textContent = "Gráfico indisponível (veja o aviso acima).";
       return;
@@ -768,7 +780,7 @@ function renderResumoEstados(L, br, ind) {
     `o Brasil fica em <b>${fmtPct(br?.pct)}</b>. <b class="delta-neg">${abaixo}</b> ${abaixo === 1 ? "estado fica" : "estados ficam"} ${LIMIAR_PP} pp ou mais abaixo do Brasil ` +
     `e <b class="delta-pos">${acima}</b>, ${LIMIAR_PP} pp ou mais acima.`;
   $("e-tiles").innerHTML = `
-    <div class="tile main" style="border-color:var(--s-br);box-shadow:inset 0 0 0 1px var(--s-br)"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
+    <div class="tile serie-br"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(br?.pct)}</div><div class="foot">${fmtInt(br?.n_resp)} respostas</div></div>
     <div class="tile"><div class="lab">Maior acerto</div>
       <div class="val">${fmtPct(max.pct)}</div><div class="foot">${esc(max.u.nome)} · ${fmtPP(max.dif)} × Brasil</div></div>
@@ -889,8 +901,8 @@ function renderDetalheUF(L, br, ind, ds) {
         <span class="v ${x.dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(x.dif)}</span></button></li>`;
     const neg = ds_.filter(x => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, 3);
     const pos = ds_.filter(x => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, 3);
-    listas = `<h3 class="delta-neg">▼ Mais abaixo do Brasil</h3><ul class="rank">${neg.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>
-      <h3 class="delta-pos">▲ Mais acima do Brasil</h3><ul class="rank">${pos.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>`;
+    listas = `<h3 class="delta-neg">${ic("desce")}Mais abaixo do Brasil</h3><ul class="rank">${neg.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>
+      <h3 class="delta-pos">${ic("sobe")}Mais acima do Brasil</h3><ul class="rank">${pos.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>`;
   }
   box.innerHTML = `
     <div class="eyebrow">Estado selecionado</div>
@@ -908,7 +920,7 @@ function renderDetalheUF(L, br, ind, ds) {
       <span>Municípios no painel</span><span>${fmtInt(r.u.n_municipios)}</span>
     </div>
     ${listas}
-    <button class="btn" type="button" id="e-ir-painel">Ver os municípios de ${esc(r.u.nome)} →</button>`;
+    <button class="btn" type="button" id="e-ir-painel">Ver os municípios de ${esc(r.u.nome)}${ic("seta")}</button>`;
   box.querySelectorAll(".rank button").forEach(b => b.onclick = () => { st.ind = b.dataset.cod; render(); });
   $("e-ir-painel").onclick = async () => {
     st.uf = r.u.id; st.mun = null; $("f-uf").value = st.uf;
@@ -975,8 +987,8 @@ function renderTabelaEstados(L, ind) {
   $("e-tabela").innerHTML = `<thead><tr><th class="num">Posição</th><th>Estado</th><th>Região</th><th class="num">Respostas</th>
     <th class="num">% acerto</th><th class="num">Dif. × Brasil</th></tr></thead><tbody>` +
     L.map(r => {
-      const d = r.dif == null ? "–" : r.dif <= -LIMIAR_PP ? `<span class="status delta-neg">▼ ${fmtPP(r.dif)}</span>`
-        : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">▲ ${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
+      const d = r.dif == null ? "–" : r.dif <= -LIMIAR_PP ? `<span class="status delta-neg">${ic("desce")}${fmtPP(r.dif)}</span>`
+        : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">${ic("sobe")}${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
       return `<tr data-uf="${r.u.id}" class="${r.u.id === st.ufSel ? "sel" : ""}"><td class="num">${r.pos}ª</td>
         <td><b>${esc(r.u.nome)}</b> <span class="muted">${r.u.sigla}</span></td><td>${regiao(r.u.id)}</td>
         <td class="num">${fmtInt(r.n)}</td><td class="num"><b>${fmtPct(r.pct)}</b></td><td class="num">${d}</td></tr>`;
@@ -1022,9 +1034,9 @@ function renderTabelaDescUF(ds) {
   }).join("");
   const tb = linhas.map(r => {
     const dif = r.dif == null ? "–" : r.dif <= -LIMIAR_PP
-      ? `<span class="status delta-neg">▼ ${fmtPP(r.dif)}</span>`
-      : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">▲ ${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
-    const badges = (r.n_itens === 1 ? ` <span class="badge warn">1 item</span>` : "") +
+      ? `<span class="status delta-neg">${ic("desce")}${fmtPP(r.dif)}</span>`
+      : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">${ic("sobe")}${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
+    const badges = (r.n_itens === 1 ? ` <span class="badge warn" title="Descritor avaliado por um único item: o resultado reflete aquela questão">${ic("alerta")}1 item</span>` : "") +
                    (r.d.matriz === "BNCC" ? ` <span class="badge">BNCC</span>` : "");
     return `<tr data-cod="${esc(r.cod)}" class="${st.ind === r.cod ? "sel" : ""}">
       <td><b>${esc(r.cod)}</b>${badges}</td>
