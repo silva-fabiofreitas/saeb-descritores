@@ -197,18 +197,33 @@
       <aside class="card detail" id="e-det" aria-live="polite"></aside>
     </div>
 
-    <div class="section-title"><span class="num">2</span><h2>Ranking dos estados</h2>
+    <div class="section-title"><span class="num">2</span><h2 id="e-desc-titulo">Descritores do estado</h2>
+      <p class="note">Clique numa linha para levar o descritor ao mapa. Clique no cabeçalho para ordenar.</p></div>
+    <section class="card">
+      <details class="tbl" open>
+        <summary>
+          <span class="note"><span class="chev">▸</span> <span id="e-desc-sub"></span></span>
+          <button class="btn ghost" type="button" id="e-btn-desc">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+            Baixar esta tabela (CSV)
+          </button>
+        </summary>
+        <div class="table-wrap"><table id="e-tab-desc"></table></div>
+      </details>
+    </section>
+
+    <div class="section-title"><span class="num">3</span><h2>Ranking dos estados</h2>
       <p class="note">Mesmas cores do mapa. A linha tracejada é o Brasil.</p></div>
     <section class="card"><div class="ec ec-rank" id="e-rank" role="img"></div></section>
 
-    <div class="section-title"><span class="num">3</span><h2>Estado × descritor</h2>
+    <div class="section-title"><span class="num">4</span><h2>Estado × descritor</h2>
       <p class="note">Diferença para o Brasil em cada descritor. Clique numa célula para levar o descritor ao mapa.</p></div>
     <section class="card">
       <div class="classes static" id="e-leg-hm" aria-hidden="true"></div>
       <div class="hm-wrap"><div class="ec" id="e-heat" role="img"></div></div>
     </section>
 
-    <div class="section-title"><span class="num">4</span><h2>Tabela dos estados</h2></div>
+    <div class="section-title"><span class="num">5</span><h2>Tabela dos estados</h2></div>
     <section class="card">
       <details class="tbl">
         <summary>

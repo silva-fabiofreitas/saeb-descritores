@@ -11,7 +11,7 @@ const REGIAO = { 1: "Norte", 2: "Nordeste", 3: "Sudeste", 4: "Sul", 5: "Centro-O
 const ECHARTS_URL = "https://cdnjs.cloudflare.com/ajax/libs/echarts/5.6.0/echarts.min.js";
 
 const st = { disc: "LP", uf: null, mun: null, rede: "Pública", ref: "UF", bncc: false, desc: null, sort: { key: "ordem", dir: 1 },
-             ind: "geral", modo: "pct", ufSel: null };
+             ind: "geral", modo: "pct", ufSel: null, sortUF: { key: "ordem", dir: 1 } };
 let D, IDX = {}, NOMES = {}, MUN_INFO = [];
 const UF_CACHE = {};        // municípios já carregados, por UF
 
@@ -192,6 +192,7 @@ function montarFiltros() {
   for (const id of ["f-bncc", "e-bncc"]) $(id).onchange = e => { st.bncc = e.target.checked; render(); };
   $("e-ind").onchange = e => { st.ind = e.target.value; render(); };
   $("e-btn-tabela").onclick = e => { e.preventDefault(); e.stopPropagation(); baixarTabelaEstados(); };
+  $("e-btn-desc").onclick = e => { e.preventDefault(); e.stopPropagation(); baixarTabelaDescUF(); };
 }
 function montarMunicipios() {
   const sel = $("f-mun");
@@ -726,6 +727,7 @@ async function renderEstados() {
   renderMapa(L, br, ind, F, T);
   renderRanking(L, br, ind, T);
   renderDetalheUF(L, br, ind, ds);
+  renderTabelaDescUF(ds);
   renderHeatmap(L, ds, T);
   renderTabelaEstados(L, ind);
 }
@@ -983,6 +985,79 @@ function renderTabelaEstados(L, ind) {
     st.ufSel = +tr.dataset.uf; render();
     $("e-det").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
+}
+// Descritores do estado selecionado × Brasil (a mesma tabela do painel de municípios, um nível acima)
+function linhasDescUF(ds) {
+  const id = st.ufSel;
+  return ds.map(d => {
+    const u = valPre(`U${id}`, d.cod), b = valPre("BR", d.cod);
+    const pos = u ? 1 + D.ufs.filter(x => x.id !== id && (valPre(`U${x.id}`, d.cod)?.pct ?? -1) > u.pct).length : null;
+    return {
+      d, ordem: d.ordem, cod: d.cod, n_itens: d.n_itens, n_resp: u?.n_resp ?? null,
+      uf: u?.pct ?? null, br: b?.pct ?? null, dif: u && b ? (u.pct - b.pct) * 100 : null,
+      branco: u ? (u.pct_branco ?? 0) + (u.pct_nulo ?? 0) : null, pos,
+    };
+  });
+}
+function renderTabelaDescUF(ds) {
+  const u = nomeUF(st.ufSel);
+  if (!u) return;
+  $("e-desc-titulo").textContent = `Descritores de ${u.nome}`;
+  $("e-desc-sub").textContent = `${DISC_NOME[st.disc]} · rede ${st.rede === "Pública" ? "pública" : "total"} · ${u.sigla} comparado ao Brasil. Escolha outro estado no mapa ou no ranking.`;
+  const linhas = linhasDescUF(ds);
+  const { key, dir } = st.sortUF;
+  linhas.sort((a, b) => {
+    const x = a[key], y = b[key];
+    if (x == null) return 1; if (y == null) return -1;
+    return (x - y) * dir;
+  });
+  const cols = [
+    ["ordem", "Descritor"], [null, "Descrição"], ["n_itens", "Itens", "num"], ["n_resp", "Respostas<br>(estado)", "num"],
+    ["uf", `Estado (${u.sigla})`, "num"], ["br", "Brasil", "num"], ["dif", "Dif. × Brasil", "num"],
+    ["pos", "Posição entre<br>os estados", "num"], ["branco", "Branco/nulo<br>(estado)", "num"],
+  ];
+  const th = cols.map(([k, t, c]) => {
+    const s = k ? `sortable${st.sortUF.key === k ? (st.sortUF.dir > 0 ? " asc" : " desc") : ""}` : "";
+    return `<th class="${s} ${c || ""}" ${k ? `data-k="${k}" tabindex="0"` : ""}>${t}</th>`;
+  }).join("");
+  const tb = linhas.map(r => {
+    const dif = r.dif == null ? "–" : r.dif <= -LIMIAR_PP
+      ? `<span class="status delta-neg">▼ ${fmtPP(r.dif)}</span>`
+      : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">▲ ${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
+    const badges = (r.n_itens === 1 ? ` <span class="badge warn">1 item</span>` : "") +
+                   (r.d.matriz === "BNCC" ? ` <span class="badge">BNCC</span>` : "");
+    return `<tr data-cod="${esc(r.cod)}" class="${st.ind === r.cod ? "sel" : ""}">
+      <td><b>${esc(r.cod)}</b>${badges}</td>
+      <td class="desc">${esc(r.d.descricao || "(não disponível)")}<div class="muted" style="font-size:12px">${esc(r.d.topico)}</div></td>
+      <td class="num">${r.n_itens}</td><td class="num">${fmtInt(r.n_resp)}</td>
+      <td class="num"><b>${fmtPct(r.uf)}</b></td><td class="num">${fmtPct(r.br)}</td><td class="num">${dif}</td>
+      <td class="num">${r.pos ? `${r.pos}ª de ${D.ufs.length}` : "–"}</td><td class="num">${fmtPct(r.branco)}</td></tr>`;
+  }).join("");
+  const t = $("e-tab-desc");
+  t.innerHTML = `<thead><tr>${th}</tr></thead><tbody>${tb}</tbody>`;
+  t.querySelectorAll("th[data-k]").forEach(h => {
+    const go = () => {
+      const k = h.dataset.k;
+      st.sortUF = { key: k, dir: st.sortUF.key === k ? -st.sortUF.dir : (k === "ordem" || k === "pos" ? 1 : -1) };
+      renderTabelaDescUF(ds);
+    };
+    h.onclick = go; h.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+  });
+  t.querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => {
+    st.ind = tr.dataset.cod; render();
+    $("e-mapa").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+function baixarTabelaDescUF() {
+  const u = nomeUF(st.ufSel);
+  if (!u) return;
+  const linhas = linhasDescUF(descritoresAtivos()).sort((a, b) => a.ordem - b.ordem).map(r => [
+    r.cod, r.d.descricao || "", r.d.topico, r.n_itens, r.n_resp,
+    r.uf == null ? null : +(r.uf * 100).toFixed(1), r.br == null ? null : +(r.br * 100).toFixed(1),
+    r.dif == null ? null : +r.dif.toFixed(1), r.pos, r.branco == null ? null : +(r.branco * 100).toFixed(1)]);
+  baixarCSV(`descritores_${u.sigla}_${st.disc}_${st.rede === "Pública" ? "publica" : "total"}.csv`,
+    ["Descritor", "Descrição", "Tópico", "Itens", "Respostas (estado)", `% Estado (${u.sigla})`, "% Brasil",
+     "Dif. × Brasil (pp)", `Posição entre os ${D.ufs.length} estados`, "% Branco/nulo (estado)"], linhas);
 }
 function baixarTabelaEstados() {
   const ind = indicador(descritoresAtivos());
