@@ -8,6 +8,7 @@ A página tem duas telas:
 
 * **Painel** (`index.html#painel`): resumo do município, pontos de atenção,
   acerto por tópico, acerto por descritor com painel de detalhe e tabela completa;
+* **Estados** (`index.html#estados`): mapa de gradação (coroplético) dos 27 estados, ranking, mapa de calor estado × descritor e tabela. O indicador pode ser o acerto geral, um tópico ou um descritor, em % de acerto ou diferença para o Brasil. Usa ECharts (carregado do cdnjs só quando a aba abre).
 * **Metodologia** (`index.html#metodologia`): como ler o painel, regras de cálculo e downloads.
 
 Downloads (gerados no navegador, CSV com `;` que abre direto no Excel):
@@ -19,10 +20,12 @@ matriz de descritores (botão no cabeçalho), tabela do município selecionado e
 dashboard_saeb/
 ├── index.html              # estrutura da página (só HTML)
 ├── assets/
+│   ├── brand/              # logo (completa, palavra, símbolo), ícone de app e favicon, em SVG
 │   ├── css/style.css       # aparência: cores (claro/escuro), layout, componentes
 │   └── js/app.js           # lógica: carga dos dados, filtros, gráficos, tabela, downloads
 ├── data/                   # dados lidos pela página (gerados; não editar à mão)
 │   ├── dados.json          # descritores, Brasil, todas as UFs, metodologia (lido na abertura)
+│   ├── br_uf.geojson       # contorno dos estados (malha do IBGE, qualidade mínima), usado no mapa
 │   ├── municipios.json     # opcional: nomes dos municípios, {"6325345": "Nome"}; começa vazio {}
 │   └── uf/<ID_UF>.json     # municípios de cada UF, lido só quando o estado é escolhido (33 = RJ)
 ├── fonte/                  # arquivos de origem dos dados

@@ -4,20 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Saeb 2023 – Acerto por Descritor</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%232a78d6'/%3E%3C/svg%3E">
+<link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/brand/app-icon.svg">
+<meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0f15" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 <meta name="description" content="Percentual de acerto por descritor da Matriz de Referência do Saeb, 5º ano do EF, Língua Portuguesa e Matemática – municípios, estados e Brasil.">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1>Acerto por descritor – Saeb 2023</h1>
-      <p class="sub">5º ano do Ensino Fundamental · municípios comparados ao seu estado e ao Brasil</p>
+    <div class="brand">
+      <a class="logo" href="#painel" aria-label="Descritores – início">
+        <picture>
+          <source srcset="assets/brand/marca-negativo.svg" media="(prefers-color-scheme: dark)">
+          <img src="assets/brand/marca.svg" alt="Descritores · Saeb" width="166" height="26">
+        </picture>
+      </a>
+      <div class="titulo">
+        <h1>Acerto por descritor – Saeb 2023</h1>
+        <p class="sub">5º ano do Ensino Fundamental · municípios, estados e Brasil</p>
+      </div>
     </div>
     <div class="top-actions">
       <nav class="tabs" aria-label="Telas">
         <a href="#painel" data-view="painel">Painel</a>
+        <a href="#estados" data-view="estados">Estados</a>
         <a href="#metodologia" data-view="metodologia">Metodologia</a>
       </nav>
       <button class="btn" type="button" id="btn-matriz" title="Baixar a matriz de descritores (CSV)">
@@ -135,6 +150,75 @@
           </button>
         </summary>
         <div class="table-wrap"><table id="tabela"></table></div>
+      </details>
+    </section>
+  </main>
+
+  <!-- ================= TELA: ESTADOS ================= -->
+  <main id="v-estados" hidden>
+    <nav class="filters" aria-label="Filtros dos estados">
+      <div class="field"><span>Disciplina</span>
+        <div class="seg" id="e-disc">
+          <button data-v="LP" aria-pressed="true">Língua Portuguesa</button>
+          <button data-v="MT" aria-pressed="false">Matemática</button>
+        </div>
+      </div>
+      <div class="field"><span>Rede</span>
+        <div class="seg" id="e-rede">
+          <button data-v="Pública" aria-pressed="true">Pública</button>
+          <button data-v="Total" aria-pressed="false">Todas</button>
+        </div>
+      </div>
+      <div class="field grow"><span>Indicador</span>
+        <select id="e-ind" aria-label="Indicador"></select>
+      </div>
+      <div class="field"><span>O mapa mostra</span>
+        <div class="seg" id="e-modo">
+          <button data-v="pct" aria-pressed="true">% de acerto</button>
+          <button data-v="dif" aria-pressed="false">Diferença × Brasil</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="e-bncc"> Incluir códigos BNCC</label>
+    </nav>
+
+    <section aria-label="Resumo dos estados">
+      <p class="headline" id="e-headline"></p>
+      <div class="tiles" id="e-tiles"></div>
+    </section>
+
+    <div class="section-title"><span class="num">1</span><h2>Mapa por estado</h2>
+      <p class="note">Passe o mouse para ver o valor; clique num estado para selecioná-lo.</p></div>
+    <div class="desc-grid">
+      <section class="card">
+        <div class="card-head"><div><h3 id="e-map-title" style="margin:0"></h3><p class="note" id="e-map-sub"></p></div></div>
+        <div class="ec ec-map" id="e-mapa" role="img"></div>
+        <div class="classes" id="e-leg" aria-label="Faixas do mapa"></div>
+      </section>
+      <aside class="card detail" id="e-det" aria-live="polite"></aside>
+    </div>
+
+    <div class="section-title"><span class="num">2</span><h2>Ranking dos estados</h2>
+      <p class="note">Mesmas cores do mapa. A linha tracejada é o Brasil.</p></div>
+    <section class="card"><div class="ec ec-rank" id="e-rank" role="img"></div></section>
+
+    <div class="section-title"><span class="num">3</span><h2>Estado × descritor</h2>
+      <p class="note">Diferença para o Brasil em cada descritor. Clique numa célula para levar o descritor ao mapa.</p></div>
+    <section class="card">
+      <div class="classes static" id="e-leg-hm" aria-hidden="true"></div>
+      <div class="hm-wrap"><div class="ec" id="e-heat" role="img"></div></div>
+    </section>
+
+    <div class="section-title"><span class="num">4</span><h2>Tabela dos estados</h2></div>
+    <section class="card">
+      <details class="tbl">
+        <summary>
+          <span class="note"><span class="chev">▸</span> Os 27 estados no indicador escolhido, com posição, respostas e diferença para o Brasil.</span>
+          <button class="btn ghost" type="button" id="e-btn-tabela">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+            Baixar esta tabela (CSV)
+          </button>
+        </summary>
+        <div class="table-wrap"><table id="e-tabela"></table></div>
       </details>
     </section>
   </main>

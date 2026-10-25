@@ -7,8 +7,11 @@ const N_ATENCAO = 4;        // itens em cada lista de pontos de atenção
 const S = { mun: "var(--s-mun)", UF: "var(--s-rj)", BR: "var(--s-br)" };
 const NOME = { mun: "Município", get UF() { return `Estado (${ufAtual().sigla})`; }, BR: "Brasil" };
 const DISC_NOME = { LP: "Língua Portuguesa", MT: "Matemática" };
+const REGIAO = { 1: "Norte", 2: "Nordeste", 3: "Sudeste", 4: "Sul", 5: "Centro-Oeste" };
+const ECHARTS_URL = "https://cdnjs.cloudflare.com/ajax/libs/echarts/5.6.0/echarts.min.js";
 
-const st = { disc: "LP", uf: null, mun: null, rede: "Pública", ref: "UF", bncc: false, desc: null, sort: { key: "ordem", dir: 1 } };
+const st = { disc: "LP", uf: null, mun: null, rede: "Pública", ref: "UF", bncc: false, desc: null, sort: { key: "ordem", dir: 1 },
+             ind: "geral", modo: "pct", ufSel: null };
 let D, IDX = {}, NOMES = {}, MUN_INFO = [];
 const UF_CACHE = {};        // municípios já carregados, por UF
 
@@ -105,13 +108,13 @@ function indexar() {
 
 /* ---------- telas ---------- */
 function rota() {
-  const met = location.hash.startsWith("#m") && location.hash !== "#painel";
-  const sec = met && location.hash !== "#metodologia" ? location.hash : null;   // âncora interna da metodologia
-  $("v-painel").hidden = met;
-  $("v-metodologia").hidden = !met;
+  const h = location.hash;
+  const view = h === "#estados" ? "estados" : h.startsWith("#m") ? "metodologia" : "painel";
+  const sec = view === "metodologia" && h !== "#metodologia" ? h : null;   // âncora interna da metodologia
+  for (const v of ["painel", "estados", "metodologia"]) $("v-" + v).hidden = v !== view;
   document.querySelectorAll(".tabs a").forEach(a =>
-    a.setAttribute("aria-current", (a.dataset.view === "metodologia") === met ? "page" : "false"));
-  if (D) { met ? renderMetodologia() : render(); }
+    a.setAttribute("aria-current", a.dataset.view === view ? "page" : "false"));
+  if (D) { view === "metodologia" ? renderMetodologia() : render(); }
   if (sec) document.querySelector(sec)?.scrollIntoView({ block: "start" });
   else window.scrollTo(0, 0);
 }
@@ -119,12 +122,13 @@ addEventListener("hashchange", rota);
 
 /* ---------- valores ---------- */
 // Retorna {pct, n_resp, n_acertos, n_alunos, pct_branco, baixa} para um nível
-function val(nivel, cod) {
-  const pre = nivel === "mun" ? `M${st.mun}` : nivel === "UF" ? `U${st.uf}` : "BR";
-  const key = `${pre}|${st.rede}|${st.disc}|${cod}`;
-  const o = IDX[key];
+// nivel: "mun" | "UF" | "BR"; prefixo: "M<id>" | "U<id>" | "BR"
+const prefixo = nivel => nivel === "mun" ? `M${st.mun}` : nivel === "UF" ? `U${st.uf}` : "BR";
+function val(nivel, cod) { return valPre(prefixo(nivel), cod); }
+function valPre(pre, cod) {
+  const o = IDX[`${pre}|${st.rede}|${st.disc}|${cod}`];
   if (!o) return null;
-  const pond = nivel !== "mun" && st.rede === "Total";
+  const pond = pre[0] !== "M" && st.rede === "Total";
   return {
     pct: pond ? o.pct_pond : o.pct, n_resp: o.n_resp, n_acertos: o.n_acertos,
     n_alunos: o.n_alunos, pct_branco: o.pct_branco, pct_nulo: o.pct_nulo,
@@ -132,10 +136,11 @@ function val(nivel, cod) {
   };
 }
 // Agregado de vários descritores: Σ acertos / Σ respostas (ou média ponderada por respostas do % ponderado)
-function agreg(nivel, cods) {
+function agreg(nivel, cods) { return agregPre(prefixo(nivel), cods); }
+function agregPre(pre, cods) {
   let num = 0, den = 0, resp = 0;
   for (const c of cods) {
-    const v = val(nivel, c); if (!v || v.pct == null) continue;
+    const v = valPre(pre, c); if (!v || v.pct == null) continue;
     num += v.pct * v.n_resp; den += v.n_resp; resp += v.n_resp;
   }
   return den ? { pct: num / den, n_resp: resp, baixa: resp < LIMITE } : null;
@@ -184,9 +189,9 @@ function montarFiltros() {
   };
   const sel = $("f-mun");
   sel.onchange = () => { st.mun = +sel.value; render(); };
-  const cb = $("f-bncc");
-  cb.checked = st.bncc;
-  cb.onchange = () => { st.bncc = cb.checked; render(); };
+  for (const id of ["f-bncc", "e-bncc"]) $(id).onchange = e => { st.bncc = e.target.checked; render(); };
+  $("e-ind").onchange = e => { st.ind = e.target.value; render(); };
+  $("e-btn-tabela").onclick = e => { e.preventDefault(); e.stopPropagation(); baixarTabelaEstados(); };
 }
 function montarMunicipios() {
   const sel = $("f-mun");
@@ -205,11 +210,17 @@ function lerURL() {
   if (p.get("uf")) st.uf = +p.get("uf");
   if (p.get("bncc") === "1") st.bncc = true;
   if (p.get("desc")) st.desc = p.get("desc");
+  if (p.get("ind")) st.ind = p.get("ind");
+  if (p.get("modo") === "dif") st.modo = "dif";
+  if (p.get("ufsel")) st.ufSel = +p.get("ufsel");
 }
 function gravarURL() {
   const p = new URLSearchParams({ disc: st.disc, uf: st.uf, mun: st.mun, rede: st.rede, ref: st.ref });
   if (st.bncc) p.set("bncc", "1");
   if (st.desc) p.set("desc", st.desc);
+  if (st.ind !== "geral") p.set("ind", st.ind);
+  if (st.modo === "dif") p.set("modo", "dif");
+  if (st.ufSel && st.ufSel !== st.uf) p.set("ufsel", st.ufSel);
   history.replaceState(null, "", "?" + p.toString() + location.hash);
 }
 function selecionar(cod) {
@@ -585,6 +596,402 @@ function renderTabela(ds) {
   t.querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => selecionar(tr.dataset.cod));
 }
 
+/* ---------- tela: estados (ECharts, carregado só quando a aba abre) ---------- */
+const EC = {};               // instâncias ECharts por id do contêiner
+let EC_PRONTO = null;
+const regiao = id => REGIAO[Math.floor(id / 10)];
+const nomeUF = id => D.ufs.find(u => u.id === id);
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const escuro = () => document.documentElement.dataset.theme === "dark" ||
+  (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+
+function prepararEstados() {
+  return EC_PRONTO ||= (async () => {
+    if (!window.echarts) await new Promise((ok, falha) => {
+      const s = Object.assign(document.createElement("script"), { src: ECHARTS_URL, onload: ok });
+      s.onerror = () => falha(new Error("não foi possível carregar a biblioteca ECharts."));
+      document.head.appendChild(s);
+    });
+    const r = await fetch(DIR_DADOS + "br_uf.geojson");
+    if (!r.ok) throw new Error(`não foi possível ler ${DIR_DADOS}br_uf.geojson (HTTP ${r.status}).`);
+    const G = await r.json();
+    for (const f of G.features) f.properties.name = nomeUF(f.properties.id)?.sigla;
+    echarts.registerMap("BR", G);
+  })().catch(e => {
+    EC_PRONTO = null;
+    const el = $("erro");
+    el.style.display = "block";
+    el.innerHTML = `<b>O mapa não pôde ser montado:</b> ${esc(e.message)}`;
+    throw e;
+  });
+}
+function grafico(id) {
+  const box = $(id);
+  if (EC[id] && EC[id].getDom() === box) return EC[id];
+  return (EC[id] = echarts.init(box, null, { renderer: "svg" }));
+}
+
+// Paletas: sequencial (azul, 5 faixas) e divergente (vermelho ↔ azul, cinza no meio, 7 faixas)
+function paletas() {
+  return escuro()
+    ? { seq: ["#1e3976", "#2e54ae", "#4573de", "#7ba3f6", "#bad1ff"],
+        div: ["#fb988d", "#d15c53", "#7a342e", "#33353b", "#2d4a88", "#5381e6", "#a7c4ff"] }
+    : { seq: ["#a0bef9", "#6b95ee", "#3567de", "#1f48ae", "#112e77"],
+        div: ["#972622", "#d24d45", "#edaaa2", "#d8dbdf", "#a4bef2", "#4a7ae4", "#183d9c"] };
+}
+// texto legível sobre a cor de fundo
+function tinta(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32 ? "#0b0b0b" : "#ffffff";
+}
+const fmtNum = (v, d = 0) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// Faixas do mapa (mapa de gradação): classes de mesma largura em % ou limites fixos em pp
+const LIM_DIF = [-10, -5, -2, 2, 5, 10];
+function faixas(valores) {
+  const P = paletas();
+  if (st.modo === "dif") {
+    const lab = ["< −10 pp", "−10 a −5", "−5 a −2", "−2 a +2", "+2 a +5", "+5 a +10", "> +10 pp"];
+    return { cores: P.div, labels: lab, classe: v => {
+      const i = LIM_DIF.findIndex((l, k) => k < 3 ? v < l : v <= l);
+      return i < 0 ? 6 : i;
+    } };
+  }
+  const lo = Math.floor(Math.min(...valores)), hi = Math.ceil(Math.max(...valores));
+  const passo = Math.max(1, Math.ceil((hi - lo) / 5));
+  const lab = P.seq.map((_, i) => `${lo + i * passo}–${lo + (i + 1) * passo}%`);
+  return { cores: P.seq, labels: lab, classe: v => Math.min(4, Math.max(0, Math.floor((v - lo) / passo))) };
+}
+function faixasDif() { const m = st.modo; st.modo = "dif"; const f = faixas([]); st.modo = m; return f; }
+
+// Indicador escolhido: acerto geral, um tópico ("T|nome") ou um descritor
+function indicador(ds) {
+  if (st.ind.startsWith("T|")) {
+    const t = st.ind.slice(2), cods = ds.filter(d => d.topico === t).map(d => d.cod);
+    if (cods.length) return { cods, nome: t, curto: t.replace(/^[IVX]+\.\s*/, ""), tipo: "tópico" };
+  } else if (st.ind !== "geral") {
+    const d = ds.find(x => x.cod === st.ind);
+    if (d) return { cods: [d.cod], nome: `${d.cod} – ${d.descricao || "(descrição não disponível)"}`, curto: d.cod, tipo: "descritor", d };
+  }
+  st.ind = "geral";
+  return { cods: ds.map(d => d.cod), nome: `Acerto geral em ${DISC_NOME[st.disc]}`, curto: "acerto geral", tipo: "geral" };
+}
+function montarIndicador(ds) {
+  const curto = s => s.length > 80 ? s.slice(0, 78) + "…" : s;
+  $("e-ind").innerHTML =
+    `<option value="geral">Acerto geral da disciplina</option>` +
+    `<optgroup label="Tópicos">${topicosAtivos(ds).map(([t]) => `<option value="T|${esc(t)}">${esc(t)}</option>`).join("")}</optgroup>` +
+    `<optgroup label="Descritores">${ds.map(d => `<option value="${esc(d.cod)}">${esc(curto(`${d.cod} · ${d.descricao || "(descrição não disponível)"}`))}</option>`).join("")}</optgroup>`;
+  $("e-ind").value = st.ind;
+}
+
+function linhasEstados(cods) {
+  const br = agregPre("BR", cods);
+  const L = D.ufs.map(u => {
+    const v = agregPre(`U${u.id}`, cods);
+    return v && { u, pct: v.pct, n: v.n_resp, dif: br ? (v.pct - br.pct) * 100 : null };
+  }).filter(Boolean).sort((a, b) => b.pct - a.pct);
+  L.forEach((r, i) => { r.pos = i + 1; r.v = st.modo === "dif" ? r.dif : r.pct * 100; });
+  return { L, br };
+}
+
+async function renderEstados() {
+  seg("e-disc", "disc"); seg("e-rede", "rede"); seg("e-modo", "modo");
+  const ds = descritoresAtivos();
+  montarIndicador(ds);
+  const ind = indicador(ds);
+  $("e-ind").value = st.ind;
+  gravarURL(); renderRodape();
+  if (!window.echarts || !EC_PRONTO) {
+    for (const id of ["e-mapa", "e-rank", "e-heat"]) { $(id).classList.add("ec-loading"); $(id).textContent = "Carregando o mapa…"; }
+    try { await prepararEstados(); } catch (_) {
+      for (const id of ["e-mapa", "e-rank", "e-heat"]) $(id).textContent = "Gráfico indisponível (veja o aviso acima).";
+      return;
+    }
+    for (const id of ["e-mapa", "e-rank", "e-heat"]) { $(id).classList.remove("ec-loading"); $(id).textContent = ""; }
+    if ($("v-estados").hidden) return;
+  }
+  await EC_PRONTO;
+  const { L, br } = linhasEstados(ind.cods);
+  if (!L.length) return;
+  if (!L.some(r => r.u.id === st.ufSel)) st.ufSel = L.some(r => r.u.id === st.uf) ? st.uf : L[0].u.id;
+  const F = faixas(L.map(r => r.v));
+  L.forEach(r => { r.k = F.classe(r.v); r.cor = F.cores[r.k]; });
+  const T = {
+    ink: cssv("--ink"), ink2: cssv("--ink-2"), muted: cssv("--muted"), grid: cssv("--grid"),
+    surface: cssv("--surface"), br: cssv("--s-br"), font: getComputedStyle(document.body).fontFamily,
+  };
+  renderResumoEstados(L, br, ind);
+  renderMapa(L, br, ind, F, T);
+  renderRanking(L, br, ind, T);
+  renderDetalheUF(L, br, ind, ds);
+  renderHeatmap(L, ds, T);
+  renderTabelaEstados(L, ind);
+}
+
+function tipUF(r, br) {
+  const cls = r.dif == null ? "" : r.dif <= -LIMIAR_PP ? "delta-neg" : r.dif >= LIMIAR_PP ? "delta-pos" : "";
+  return `<b>${esc(r.u.nome)} (${r.u.sigla})</b><div class="d">${regiao(r.u.id)} · ${r.pos}ª de ${D.ufs.length}</div>
+    <div class="tr"><span>Acerto</span><b>${fmtPct(r.pct)}</b></div>
+    <div class="tr"><span><i style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(br?.pct)}</span></div>
+    <div class="tr"><span>Diferença</span><b class="${cls}">${fmtPP(r.dif)}</b></div>
+    <div class="tr muted"><span>Respostas</span><span>${fmtInt(r.n)}</span></div>`;
+}
+// liga o tooltip da página e o destaque cruzado (mapa ↔ ranking)
+function ligarEventos(ch, L, br, outros) {
+  ch.off("mousemove"); ch.off("mouseout"); ch.off("click"); ch.off("globalout");
+  const achar = p => L.find(r => r.u.sigla === p.name);
+  const realce = (tipo, r) => outros().forEach(o => o.dispatchAction({ type: tipo, seriesIndex: 0, dataIndex: L.indexOf(r) }));
+  let atual = null;
+  ch.on("mousemove", p => {
+    const r = achar(p); if (!r) return;
+    showTip(p.event.event, tipUF(r, br) + `<div class="d" style="margin:6px 0 0">Clique para selecionar</div>`);
+    if (atual !== r) { if (atual) realce("downplay", atual); realce("highlight", r); atual = r; }
+  });
+  const sair = () => { hideTip(); if (atual) realce("downplay", atual); atual = null; };
+  ch.on("mouseout", sair); ch.on("globalout", sair);
+  ch.on("click", p => { const r = achar(p); if (r) { hideTip(); st.ufSel = r.u.id; render(); } });
+}
+
+function renderResumoEstados(L, br, ind) {
+  const max = L[0], min = L[L.length - 1];
+  const abaixo = L.filter(r => r.dif <= -LIMIAR_PP).length, acima = L.filter(r => r.dif >= LIMIAR_PP).length;
+  const rede = st.rede === "Pública" ? "na rede pública" : "em todas as redes";
+  const oque = ind.tipo === "geral" ? `o acerto geral em <b>${DISC_NOME[st.disc]}</b>`
+    : ind.tipo === "tópico" ? `o acerto no tópico <b>${esc(ind.curto)}</b> (${DISC_NOME[st.disc]})`
+    : `o acerto no descritor <b>${esc(ind.d.cod)}</b> (${DISC_NOME[st.disc]})`;
+  $("e-headline").innerHTML =
+    `${oque[0].toUpperCase() + oque.slice(1)}, ${rede}, vai de <b>${fmtPct(min.pct)}</b> (${esc(min.u.nome)}) a <b>${fmtPct(max.pct)}</b> (${esc(max.u.nome)}); ` +
+    `o Brasil fica em <b>${fmtPct(br?.pct)}</b>. <b class="delta-neg">${abaixo}</b> ${abaixo === 1 ? "estado fica" : "estados ficam"} ${LIMIAR_PP} pp ou mais abaixo do Brasil ` +
+    `e <b class="delta-pos">${acima}</b>, ${LIMIAR_PP} pp ou mais acima.`;
+  $("e-tiles").innerHTML = `
+    <div class="tile main" style="border-color:var(--s-br);box-shadow:inset 0 0 0 1px var(--s-br)"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
+      <div class="val">${fmtPct(br?.pct)}</div><div class="foot">${fmtInt(br?.n_resp)} respostas</div></div>
+    <div class="tile"><div class="lab">Maior acerto</div>
+      <div class="val">${fmtPct(max.pct)}</div><div class="foot">${esc(max.u.nome)} · ${fmtPP(max.dif)} × Brasil</div></div>
+    <div class="tile"><div class="lab">Menor acerto</div>
+      <div class="val">${fmtPct(min.pct)}</div><div class="foot">${esc(min.u.nome)} · ${fmtPP(min.dif)} × Brasil</div></div>
+    <div class="tile"><div class="lab">Distância entre o maior e o menor</div>
+      <div class="val">${fmtNum((max.pct - min.pct) * 100, 1)}<span class="muted" style="font-size:16px;font-weight:500"> pp</span></div>
+      <div class="foot">pontos percentuais</div></div>`;
+}
+
+function renderMapa(L, br, ind, F, T) {
+  const ch = grafico("e-mapa");
+  $("e-map-title").textContent = ind.nome;
+  $("e-map-sub").textContent = st.modo === "dif"
+    ? `Diferença de cada estado para o Brasil (${fmtPct(br?.pct)}), em pontos percentuais. Vermelho: abaixo; azul: acima.`
+    : `Percentual de acerto, em ${F.cores.length} faixas de mesma largura. Mais escuro = maior acerto.`;
+  $("e-mapa").setAttribute("aria-label", `Mapa do Brasil por estado: ${ind.nome}`);
+  ch.setOption({
+    animationDurationUpdate: 300,
+    textStyle: { fontFamily: T.font },
+    series: [{
+      type: "map", map: "BR", roam: false, selectedMode: false, aspectScale: 0.95,
+      left: 4, right: 4, top: 4, bottom: 4,
+      label: { show: true, fontSize: 10, fontWeight: 600 },
+      itemStyle: { borderColor: T.surface, borderWidth: 0.8 },
+      data: L.map(r => {
+        const sel = r.u.id === st.ufSel, lc = tinta(r.cor);
+        return {
+          name: r.u.sigla, value: r.v,
+          itemStyle: { areaColor: r.cor, borderColor: sel ? T.ink : T.surface, borderWidth: sel ? 2.5 : 0.8 },
+          label: { color: lc },
+          emphasis: { itemStyle: { areaColor: r.cor, borderColor: T.ink, borderWidth: 2 }, label: { color: lc } },
+        };
+      }),
+    }],
+  }, true);
+  ligarEventos(ch, L, br, () => [EC["e-rank"]].filter(Boolean));
+
+  // legenda: faixas com nº de estados; passar o mouse destaca os estados da faixa
+  const leg = $("e-leg");
+  leg.innerHTML = F.cores.map((c, i) => {
+    const n = L.filter(r => r.k === i).length;
+    return `<button type="button" class="cls" data-k="${i}" title="${n} ${n === 1 ? "estado" : "estados"}"><i style="background:${c}"></i>${F.labels[i]} <b>${n}</b></button>`;
+  }).join("") + (st.modo === "pct" && br ? `<span class="cls"><i style="background:none;border-top:2px dashed var(--s-br);height:0;border-radius:0"></i>Brasil ${fmtPct(br.pct)}</span>` : "");
+  leg.querySelectorAll("button").forEach(b => {
+    const idx = L.map((r, i) => r.k === +b.dataset.k ? i : -1).filter(i => i >= 0);
+    const acao = tipo => () => idx.length && [ch, EC["e-rank"]].forEach(c => c?.dispatchAction({ type: tipo, seriesIndex: 0, dataIndex: idx }));
+    b.onmouseenter = b.onfocus = acao("highlight");
+    b.onmouseleave = b.onblur = acao("downplay");
+  });
+}
+
+function renderRanking(L, br, ind, T) {
+  const deitado = $("e-rank").clientWidth < 620;   // celular: barras horizontais, uma linha por estado
+  $("e-rank").style.height = deitado ? `${L.length * 20 + 50}px` : "";
+  const ch = grafico("e-rank");
+  ch.resize();
+  const dif = st.modo === "dif";
+  const ref = dif ? 0 : (br?.pct ?? 0) * 100;
+  const fmtV = v => dif ? fmtPP(v) : fmtNum(v, 1) + "%";
+  $("e-rank").setAttribute("aria-label", `Ranking dos estados: ${ind.nome}`);
+  ch.setOption({
+    animationDurationUpdate: 300,
+    textStyle: { fontFamily: T.font },
+    grid: deitado ? { left: 34, right: 48, top: 24, bottom: 8 } : { left: 44, right: 12, top: 24, bottom: 28 },
+    [deitado ? "yAxis" : "xAxis"]: {
+      type: "category", data: L.map(r => r.u.sigla), inverse: deitado,
+      axisTick: { show: false }, axisLine: { lineStyle: { color: T.grid } },
+      axisLabel: {
+        interval: 0, fontSize: 11, color: T.ink2,
+        formatter: s => s === nomeUF(st.ufSel)?.sigla ? `{sel|${s}}` : s,
+        rich: { sel: { color: T.ink, fontWeight: 700, fontSize: 11 } },
+      },
+    },
+    [deitado ? "xAxis" : "yAxis"]: {
+      type: "value", position: deitado ? "top" : undefined, ...(dif ? {} : { min: 0, max: v => Math.min(100, Math.ceil(v.max / 10) * 10) }),
+      splitLine: { lineStyle: { color: T.grid } }, axisLabel: { color: T.muted, fontSize: 11, formatter: v => dif ? `${v > 0 ? "+" : ""}${v}` : `${v}%` },
+    },
+    series: [{
+      type: "bar", barCategoryGap: "28%",
+      data: L.map(r => {
+        const sel = r.u.id === st.ufSel;
+        return {
+          value: r.v,
+          itemStyle: { color: r.cor, borderColor: sel ? T.ink : "transparent", borderWidth: sel ? 1.5 : 0,
+            borderRadius: deitado ? (r.v >= 0 ? [0, 4, 4, 0] : [4, 0, 0, 4]) : (r.v >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4]) },
+          label: { show: sel, position: deitado ? (r.v >= 0 ? "right" : "left") : (r.v >= 0 ? "top" : "bottom"), formatter: () => fmtV(r.v), color: T.ink, fontWeight: 650, fontSize: 11 },
+        };
+      }),
+      emphasis: { itemStyle: { borderColor: T.ink, borderWidth: 1.5 } },
+      markLine: {
+        silent: true, symbol: "none", animation: false,
+        lineStyle: { color: T.br, type: [5, 4], width: 2 },
+        label: { formatter: dif ? "Brasil" : `Brasil ${fmtNum(ref, 1)}%`, position: deitado ? "end" : "insideEndTop", color: T.ink2, fontSize: 11 },
+        data: [{ [deitado ? "xAxis" : "yAxis"]: ref }],
+      },
+    }],
+  }, true);
+  ligarEventos(ch, L, br, () => [EC["e-mapa"]].filter(Boolean));
+}
+
+function renderDetalheUF(L, br, ind, ds) {
+  const r = L.find(x => x.u.id === st.ufSel);
+  const box = $("e-det");
+  if (!r) { box.innerHTML = ""; return; }
+  const cls = r.dif == null ? "" : r.dif <= -LIMIAR_PP ? "neg" : r.dif >= LIMIAR_PP ? "pos" : "";
+  const reg = L.filter(x => regiao(x.u.id) === regiao(r.u.id));
+  const posReg = reg.indexOf(r) + 1;
+  // descritores do estado em relação ao Brasil (só faz sentido quando o indicador reúne vários)
+  let listas = "";
+  if (ind.cods.length > 1) {
+    const ds_ = ds.filter(d => ind.cods.includes(d.cod)).map(d => {
+      const u = valPre(`U${r.u.id}`, d.cod), b = valPre("BR", d.cod);
+      return { d, dif: u && b ? (u.pct - b.pct) * 100 : null };
+    }).filter(x => x.dif != null);
+    const item = x => `<li><button type="button" data-cod="${esc(x.d.cod)}" title="${esc(x.d.descricao || "")}">
+        <span class="c">${esc(x.d.cod)}</span><span class="t">${esc(x.d.descricao || "(descrição não disponível)")}</span>
+        <span class="v ${x.dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(x.dif)}</span></button></li>`;
+    const neg = ds_.filter(x => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, 3);
+    const pos = ds_.filter(x => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, 3);
+    listas = `<h3 class="delta-neg">▼ Mais abaixo do Brasil</h3><ul class="rank">${neg.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>
+      <h3 class="delta-pos">▲ Mais acima do Brasil</h3><ul class="rank">${pos.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>`;
+  }
+  box.innerHTML = `
+    <div class="eyebrow">Estado selecionado</div>
+    <h2>${esc(r.u.nome)} <span class="badge">${r.u.sigla}</span></h2>
+    <p class="note">${regiao(r.u.id)} · ${esc(ind.nome)}</p>
+    <div class="uf-big">${fmtPct(r.pct)}${r.dif == null ? "" : `<span class="pill ${cls}">${fmtPP(r.dif)} × Brasil</span>`}</div>
+    <div class="bars">${[["Estado", r.pct, "var(--s-rj)"], ["Brasil", br?.pct, "var(--s-br)"]].map(([n, v, c]) => `
+      <div class="bar-row"><span class="bl"><i style="background:${c}"></i>${n}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${v == null ? 0 : (v * 100).toFixed(1)}%;background:${c}"></div></div>
+        <span class="bv">${fmtPct(v)}</span></div>`).join("")}</div>
+    <div class="kv">
+      <span>Posição no Brasil</span><span>${r.pos}ª de ${L.length}</span>
+      <span>Posição no ${regiao(r.u.id)}</span><span>${posReg}ª de ${reg.length}</span>
+      <span>Respostas</span><span>${fmtInt(r.n)}</span>
+      <span>Municípios no painel</span><span>${fmtInt(r.u.n_municipios)}</span>
+    </div>
+    ${listas}
+    <button class="btn" type="button" id="e-ir-painel">Ver os municípios de ${esc(r.u.nome)} →</button>`;
+  box.querySelectorAll(".rank button").forEach(b => b.onclick = () => { st.ind = b.dataset.cod; render(); });
+  $("e-ir-painel").onclick = async () => {
+    st.uf = r.u.id; st.mun = null; $("f-uf").value = st.uf;
+    await carregarUF(st.uf);
+    location.hash = "#painel";
+  };
+}
+
+function renderHeatmap(L, ds, T) {
+  const box = $("e-heat");
+  const F = faixasDif();
+  const cel = 26, left = 44, top = 34;
+  box.style.minWidth = `${left + ds.length * 30 + 12}px`;
+  box.style.height = `${top + L.length * cel + 8}px`;
+  const ch = grafico("e-heat");
+  ch.resize();
+  const dados = [];
+  L.forEach((r, y) => ds.forEach((d, x) => {
+    const u = valPre(`U${r.u.id}`, d.cod), b = valPre("BR", d.cod);
+    if (!u || !b || u.pct == null || b.pct == null) return;
+    const dif = (u.pct - b.pct) * 100;
+    dados.push({ value: [x, y, dif], r, d, u, b, itemStyle: { color: F.cores[F.classe(dif)] } });
+  }));
+  $("e-leg-hm").innerHTML = F.cores.map((c, i) => `<span class="cls"><i style="background:${c}"></i>${F.labels[i]}</span>`).join("");
+  box.setAttribute("aria-label", "Mapa de calor: diferença de cada estado para o Brasil em cada descritor");
+  const selSig = nomeUF(st.ufSel)?.sigla;
+  ch.setOption({
+    animation: false,
+    textStyle: { fontFamily: T.font },
+    grid: { left, right: 4, top, bottom: 4 },
+    xAxis: {
+      type: "category", position: "top", data: ds.map(d => d.cod),
+      axisTick: { show: false }, axisLine: { show: false }, splitArea: { show: false },
+      axisLabel: { interval: 0, fontSize: 11, color: T.ink2, rotate: ds.length > 24 ? 45 : 0,
+        formatter: s => s === st.ind ? `{sel|${s}}` : s, rich: { sel: { color: T.ink, fontWeight: 700, fontSize: 11 } } },
+    },
+    yAxis: {
+      type: "category", inverse: true, data: L.map(r => r.u.sigla),
+      axisTick: { show: false }, axisLine: { show: false },
+      axisLabel: { fontSize: 11, color: T.ink2, formatter: s => s === selSig ? `{sel|${s}}` : s,
+        rich: { sel: { color: T.ink, fontWeight: 700, fontSize: 11 } } },
+    },
+    series: [{
+      type: "heatmap", data: dados,
+      itemStyle: { borderColor: T.surface, borderWidth: 2, borderRadius: 3 },
+      emphasis: { itemStyle: { borderColor: T.ink, borderWidth: 1.5 } },
+    }],
+  }, true);
+  ch.off("mousemove"); ch.off("mouseout"); ch.off("globalout"); ch.off("click");
+  ch.on("mousemove", p => {
+    const { r, d, u, b } = p.data, dif = p.data.value[2];
+    showTip(p.event.event, `<b>${esc(r.u.nome)} · ${esc(d.cod)}</b><div class="d">${esc(d.descricao || "(descrição não disponível)")}</div>
+      <div class="tr"><span><i style="background:var(--s-rj)"></i>Estado</span><b>${fmtPct(u.pct)}</b></div>
+      <div class="tr"><span><i style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(b.pct)}</span></div>
+      <div class="tr"><span>Diferença</span><b class="${dif <= -LIMIAR_PP ? "delta-neg" : dif >= LIMIAR_PP ? "delta-pos" : ""}">${fmtPP(dif)}</b></div>
+      <div class="tr muted"><span>Respostas no estado</span><span>${fmtInt(u.n_resp)}</span></div>
+      <div class="d" style="margin:6px 0 0">Clique para levar ${esc(d.cod)} ao mapa</div>`);
+  });
+  ch.on("mouseout", hideTip); ch.on("globalout", hideTip);
+  ch.on("click", p => { hideTip(); st.ind = p.data.d.cod; st.ufSel = p.data.r.u.id; render(); });
+}
+
+function renderTabelaEstados(L, ind) {
+  $("e-tabela").innerHTML = `<thead><tr><th class="num">Posição</th><th>Estado</th><th>Região</th><th class="num">Respostas</th>
+    <th class="num">% acerto</th><th class="num">Dif. × Brasil</th></tr></thead><tbody>` +
+    L.map(r => {
+      const d = r.dif == null ? "–" : r.dif <= -LIMIAR_PP ? `<span class="status delta-neg">▼ ${fmtPP(r.dif)}</span>`
+        : r.dif >= LIMIAR_PP ? `<span class="status delta-pos">▲ ${fmtPP(r.dif)}</span>` : fmtPP(r.dif);
+      return `<tr data-uf="${r.u.id}" class="${r.u.id === st.ufSel ? "sel" : ""}"><td class="num">${r.pos}ª</td>
+        <td><b>${esc(r.u.nome)}</b> <span class="muted">${r.u.sigla}</span></td><td>${regiao(r.u.id)}</td>
+        <td class="num">${fmtInt(r.n)}</td><td class="num"><b>${fmtPct(r.pct)}</b></td><td class="num">${d}</td></tr>`;
+    }).join("") + `</tbody>`;
+  $("e-tabela").querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => {
+    st.ufSel = +tr.dataset.uf; render();
+    $("e-det").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+}
+function baixarTabelaEstados() {
+  const ind = indicador(descritoresAtivos());
+  const { L } = linhasEstados(ind.cods);
+  baixarCSV(`estados_${st.disc}_${st.ind.replace(/[^\w.-]+/g, "_")}_${st.rede === "Pública" ? "publica" : "total"}.csv`,
+    ["Posição", "UF", "Estado", "Região", "Indicador", "Respostas", "% acerto", "Dif. × Brasil (pp)"],
+    L.map(r => [r.pos, r.u.sigla, r.u.nome, regiao(r.u.id), ind.nome, r.n, +(r.pct * 100).toFixed(1), r.dif == null ? null : +r.dif.toFixed(1)]));
+}
+
 /* ---------- metodologia e rodapé ---------- */
 function renderMetodologia() {
   $("regras").innerHTML =
@@ -600,6 +1007,8 @@ function renderRodape() {
 }
 
 function render() {
+  $("f-bncc").checked = $("e-bncc").checked = st.bncc;
+  if (!$("v-estados").hidden) return renderEstados();
   if ($("v-painel").hidden) return;
   document.querySelectorAll(".lg-uf").forEach(e => { e.textContent = `Estado (${ufAtual().sigla})`; });
   seg("f-disc", "disc"); seg("f-rede", "rede"); seg("f-ref", "ref");
@@ -615,5 +1024,9 @@ function render() {
 }
 
 let rz;
-addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => D && render(), 150); });
+addEventListener("resize", () => {
+  clearTimeout(rz);
+  rz = setTimeout(() => { Object.values(EC).forEach(c => c.resize()); D && render(); }, 150);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => D && render());
 carregar();
