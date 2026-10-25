@@ -105,8 +105,8 @@
       <div class="card-head" style="margin-bottom:4px">
         <div class="legend" aria-hidden="true">
           <span><i style="background:var(--s-mun)"></i>Município</span>
-          <span><i style="background:var(--s-rj)"></i><span class="lg-uf">Estado</span></span>
-          <span><i style="background:var(--s-br)"></i>Brasil</span>
+          <span><i class="losango" style="background:var(--s-rj)"></i><span class="lg-uf">Estado</span></span>
+          <span><i class="menor" style="background:var(--s-br)"></i>Brasil</span>
         </div>
       </div>
       <div class="chart" id="ch-topicos"></div>
@@ -121,8 +121,8 @@
           <div class="legend" aria-hidden="true">
             <span><i style="background:var(--s-mun)"></i>Município</span>
             <span><i class="hollow"></i>&lt; 30 respostas</span>
-            <span><i style="background:var(--s-rj)"></i><span class="lg-uf">Estado</span></span>
-            <span><i style="background:var(--s-br)"></i>Brasil</span>
+            <span><i class="losango" style="background:var(--s-rj)"></i><span class="lg-uf">Estado</span></span>
+            <span><i class="menor" style="background:var(--s-br)"></i>Brasil</span>
             <span class="alerta"><svg class="ic" aria-hidden="true"><use href="#i-alerta"/></svg>1 só item</span>
           </div>
         </div>
@@ -142,7 +142,7 @@
         <div class="legend small" aria-hidden="true">
           <span><i style="background:var(--s-mun)"></i>Selecionado</span>
           <span><i style="background:var(--muted)"></i>Demais</span>
-          <span><b style="color:var(--s-rj)">┆</b>&nbsp;Estado</span>
+          <span><b style="color:var(--s-rj)">┆</b>&nbsp;<span class="lg-uf">Estado</span></span>
           <span><b style="color:var(--s-br)">┆</b>&nbsp;Brasil</span>
         </div>
       </aside>
@@ -266,8 +266,8 @@
       <div class="howto">
         <span class="sym"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--s-mun)"/></svg></span><span>Município selecionado</span>
         <span class="sym"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--s-mun)" stroke-width="2.5"/></svg></span><span>Município com menos de 30 respostas no descritor: ler com muita cautela</span>
-        <span class="sym"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--s-rj)"/></svg></span><span>Estado do município selecionado</span>
-        <span class="sym"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--s-br)"/></svg></span><span>Brasil</span>
+        <span class="sym"><svg width="14" height="14" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1" transform="rotate(45 7 7)" fill="var(--s-rj)"/></svg></span><span>Estado do município selecionado</span>
+        <span class="sym"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="var(--s-br)"/></svg></span><span>Brasil</span>
         <span class="sym alerta"><svg class="ic" aria-hidden="true"><use href="#i-alerta"/></svg></span><span>Descritor avaliado por um único item</span>
         <span class="sym delta-neg"><svg class="ic" aria-hidden="true"><use href="#i-desce"/></svg></span><span>Município 5 pontos percentuais (pp) ou mais abaixo da referência escolhida</span>
         <span class="sym delta-pos"><svg class="ic" aria-hidden="true"><use href="#i-sobe"/></svg></span><span>Município 5 pp ou mais acima da referência escolhida</span>

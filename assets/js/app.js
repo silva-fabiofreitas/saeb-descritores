@@ -5,6 +5,7 @@ const LIMITE = 30;          // respostas mínimas para confiabilidade
 const LIMIAR_PP = 5;        // diferença destacada (pontos percentuais)
 const N_ATENCAO = 4;        // itens em cada lista de pontos de atenção
 const S = { mun: "var(--s-mun)", UF: "var(--s-rj)", BR: "var(--s-br)" };
+const MK = { mun: "", UF: "losango", BR: "menor" };   // forma do marcador em legendas e tooltips (design system: cor e forma)
 const NOME = { mun: "Município", get UF() { return `Estado (${ufAtual().sigla})`; }, BR: "Brasil" };
 const DISC_NOME = { LP: "Língua Portuguesa", MT: "Matemática" };
 const REGIAO = { 1: "Norte", 2: "Nordeste", 3: "Sudeste", 4: "Sul", 5: "Centro-Oeste" };
@@ -286,7 +287,7 @@ const hideTip = () => { tip.style.display = "none"; };
 function tipLinhas(vals) {
   return ["mun", "UF", "BR"].map(n => {
     const v = vals[n];
-    return `<div class="tr"><span><i style="background:${S[n]}"></i>${NOME[n]}</span><b>${v ? fmtPct(v.pct) : "–"}</b></div>`;
+    return `<div class="tr"><span><i class="${MK[n]}" style="background:${S[n]}"></i>${NOME[n]}</span><b>${v ? fmtPct(v.pct) : "–"}</b></div>`;
   }).join("") + (vals.mun ? `<div class="tr muted"><span>Respostas no município</span><span>${fmtInt(vals.mun.n_resp)}</span></div>` : "");
 }
 
@@ -364,15 +365,22 @@ function dotPlot(container, rows, opts) {
     // faixa entre min e max
     const vs = ["mun", "UF", "BR"].map(n => r.vals[n]?.pct).filter(v => v != null);
     if (vs.length > 1) el("line", { x1: X(Math.min(...vs)), x2: X(Math.max(...vs)), y1: cy, y2: cy, class: "rng" }, svg);
-    // pontos: Brasil, estado, município por cima
+    // marcadores (design system): Brasil = círculo cinza 12 px, estado = losango 10 px, município = círculo 16 px por cima
     for (const n of ["BR", "UF", "mun"]) {
       const v = r.vals[n]; if (!v || v.pct == null) continue;
-      const hollow = n === "mun" && v.baixa;
-      el("circle", {
-        cx: X(v.pct), cy, r: n === "mun" ? 6 : 5, class: "dot",
-        fill: hollow ? "var(--surface)" : S[n],
-        ...(hollow ? { stroke: S[n], "stroke-width": 2.5 } : {}),
-      }, svg);
+      const x = X(v.pct);
+      if (n === "UF") {
+        el("path", { d: `M${x} ${cy - 5.5}L${x + 5.5} ${cy}L${x} ${cy + 5.5}L${x - 5.5} ${cy}Z`, class: "dot", fill: S.UF }, svg);
+      } else if (n === "BR") {
+        el("circle", { cx: x, cy, r: 6, class: "dot", fill: S.BR }, svg);
+      } else {
+        const hollow = v.baixa;
+        el("circle", {
+          cx: x, cy, r: hollow ? 7 : 8, class: "dot",
+          fill: hollow ? "var(--surface)" : S.mun,
+          ...(hollow ? { stroke: S.mun, "stroke-width": 2.5 } : {}),
+        }, svg);
+      }
     }
     hit.addEventListener("mousemove", e => showTip(e, r.tip));
     hit.addEventListener("mouseleave", hideTip);
@@ -408,9 +416,9 @@ function renderResumo(ds) {
     <div class="tile main"><div class="lab"><i style="background:var(--s-mun)"></i>Município · acerto geral</div>
       <div class="val">${fmtPct(a.mun?.pct)}${dif == null ? "" : `<span class="pill ${cls}">${fmtPP(dif)} × ${refCurto()}</span>`}</div>
       <div class="foot">${fmtInt(a.mun?.n_resp)} respostas · ${disc}</div></div>
-    <div class="tile serie-uf"><div class="lab"><i style="background:var(--s-rj)"></i>${esc(ufAtual().nome)}</div>
+    <div class="tile serie-uf"><div class="lab"><i class="losango" style="background:var(--s-rj)"></i>${esc(ufAtual().nome)}</div>
       <div class="val">${fmtPct(a.UF?.pct)}</div><div class="foot">${fmtInt(a.UF?.n_resp)} respostas</div></div>
-    <div class="tile serie-br"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
+    <div class="tile serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(a.BR?.pct)}</div><div class="foot">${fmtInt(a.BR?.n_resp)} respostas</div></div>
     <div class="tile"><div class="lab">Descritores abaixo ${st.ref === "UF" ? "do estado" : "do Brasil"}</div>
       <div class="val ${abaixo ? "delta-neg" : ""}">${lista.length ? abaixo : "–"}<span class="muted" style="font-size:16px;font-weight:500"> de ${lista.length}</span></div>
@@ -487,7 +495,7 @@ function renderDetalhe(ds) {
   $("dt-desc").textContent = d.descricao || "(descrição não disponível na Matriz de 2001)";
   $("dt-top").textContent = d.topico;
   $("dt-bars").innerHTML = ["mun", "UF", "BR"].map(n => `
-    <div class="bar-row"><span class="bl"><i style="background:${S[n]}"></i>${n === "mun" ? "Município" : n === "UF" ? `Estado (${ufAtual().sigla})` : "Brasil"}</span>
+    <div class="bar-row"><span class="bl"><i class="${MK[n]}" style="background:${S[n]}"></i>${n === "mun" ? "Município" : n === "UF" ? `Estado (${ufAtual().sigla})` : "Brasil"}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${v[n] ? (v[n].pct * 100).toFixed(1) : 0}%;background:${S[n]}${n === "mun" && v.mun?.baixa ? ";opacity:.45" : ""}"></div></div>
       <span class="bv">${fmtPct(v[n]?.pct)}</span></div>`).join("");
   $("dt-kv").innerHTML = `
@@ -748,7 +756,7 @@ function tipUF(r, br) {
   const cls = r.dif == null ? "" : r.dif <= -LIMIAR_PP ? "delta-neg" : r.dif >= LIMIAR_PP ? "delta-pos" : "";
   return `<b>${esc(r.u.nome)} (${r.u.sigla})</b><div class="d">${regiao(r.u.id)} · ${r.pos}ª de ${D.ufs.length}</div>
     <div class="tr"><span>Acerto</span><b>${fmtPct(r.pct)}</b></div>
-    <div class="tr"><span><i style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(br?.pct)}</span></div>
+    <div class="tr"><span><i class="menor" style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(br?.pct)}</span></div>
     <div class="tr"><span>Diferença</span><b class="${cls}">${fmtPP(r.dif)}</b></div>
     <div class="tr muted"><span>Respostas</span><span>${fmtInt(r.n)}</span></div>`;
 }
@@ -780,7 +788,7 @@ function renderResumoEstados(L, br, ind) {
     `o Brasil fica em <b>${fmtPct(br?.pct)}</b>. <b class="delta-neg">${abaixo}</b> ${abaixo === 1 ? "estado fica" : "estados ficam"} ${LIMIAR_PP} pp ou mais abaixo do Brasil ` +
     `e <b class="delta-pos">${acima}</b>, ${LIMIAR_PP} pp ou mais acima.`;
   $("e-tiles").innerHTML = `
-    <div class="tile serie-br"><div class="lab"><i style="background:var(--s-br)"></i>Brasil</div>
+    <div class="tile serie-br"><div class="lab"><i class="menor" style="background:var(--s-br)"></i>Brasil</div>
       <div class="val">${fmtPct(br?.pct)}</div><div class="foot">${fmtInt(br?.n_resp)} respostas</div></div>
     <div class="tile"><div class="lab">Maior acerto</div>
       <div class="val">${fmtPct(max.pct)}</div><div class="foot">${esc(max.u.nome)} · ${fmtPP(max.dif)} × Brasil</div></div>
@@ -909,8 +917,8 @@ function renderDetalheUF(L, br, ind, ds) {
     <h2>${esc(r.u.nome)} <span class="badge">${r.u.sigla}</span></h2>
     <p class="note">${regiao(r.u.id)} · ${esc(ind.nome)}</p>
     <div class="uf-big">${fmtPct(r.pct)}${r.dif == null ? "" : `<span class="pill ${cls}">${fmtPP(r.dif)} × Brasil</span>`}</div>
-    <div class="bars">${[["Estado", r.pct, "var(--s-rj)"], ["Brasil", br?.pct, "var(--s-br)"]].map(([n, v, c]) => `
-      <div class="bar-row"><span class="bl"><i style="background:${c}"></i>${n}</span>
+    <div class="bars">${[["Estado", r.pct, "var(--s-rj)", "losango"], ["Brasil", br?.pct, "var(--s-br)", "menor"]].map(([n, v, c, mk]) => `
+      <div class="bar-row"><span class="bl"><i class="${mk}" style="background:${c}"></i>${n}</span>
         <div class="bar-track"><div class="bar-fill" style="width:${v == null ? 0 : (v * 100).toFixed(1)}%;background:${c}"></div></div>
         <span class="bv">${fmtPct(v)}</span></div>`).join("")}</div>
     <div class="kv">
@@ -973,8 +981,8 @@ function renderHeatmap(L, ds, T) {
   ch.on("mousemove", p => {
     const { r, d, u, b } = p.data, dif = p.data.value[2];
     showTip(p.event.event, `<b>${esc(r.u.nome)} · ${esc(d.cod)}</b><div class="d">${esc(d.descricao || "(descrição não disponível)")}</div>
-      <div class="tr"><span><i style="background:var(--s-rj)"></i>Estado</span><b>${fmtPct(u.pct)}</b></div>
-      <div class="tr"><span><i style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(b.pct)}</span></div>
+      <div class="tr"><span><i class="losango" style="background:var(--s-rj)"></i>Estado</span><b>${fmtPct(u.pct)}</b></div>
+      <div class="tr"><span><i class="menor" style="background:var(--s-br)"></i>Brasil</span><span>${fmtPct(b.pct)}</span></div>
       <div class="tr"><span>Diferença</span><b class="${dif <= -LIMIAR_PP ? "delta-neg" : dif >= LIMIAR_PP ? "delta-pos" : ""}">${fmtPP(dif)}</b></div>
       <div class="tr muted"><span>Respostas no estado</span><span>${fmtInt(u.n_resp)}</span></div>
       <div class="d" style="margin:6px 0 0">Clique para levar ${esc(d.cod)} ao mapa</div>`);
