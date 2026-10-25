@@ -304,23 +304,45 @@ function medirTexto(txt, fonte) {
   CTX_MEDIDA.font = fonte;
   return CTX_MEDIDA.measureText(txt).width;
 }
+// Quebra um texto em linhas que cabem em `larg` px (nunca corta com reticências)
+function quebrar(txt, larg, fonte) {
+  const linhas = [];
+  let atual = "";
+  for (const p of String(txt).split(/\s+/)) {
+    const tent = atual ? `${atual} ${p}` : p;
+    if (atual && medirTexto(tent, fonte) > larg) { linhas.push(atual); atual = p; } else atual = tent;
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
 function dotPlot(container, rows, opts) {
-  // rows: [{tipo:"cab", label} | {tipo:"lin", id, label, sub, warn, vals:{mun,UF,BR}, tip}]
+  // rows: [{tipo:"cab", label} | {tipo:"lin", id, code?, label, warn, vals:{mun,UF,BR}, tip}]
+  // opts.valores: rotula o valor do município e mostra a coluna "vs referência" à direita
   container.innerHTML = "";
   const W = Math.max(300, container.clientWidth);
   const narrow = W < 560;
-  const stack = narrow && opts.stackNarrow;          // rótulo acima dos pontos
-  const labW = stack ? 0 : narrow ? (opts.labNarrow || 64) : Math.min(opts.lab || 300, Math.round(W * 0.46));
-  const right = 16, top = 26, headH = 30;
-  const rowH = stack ? 44 : (opts.rowH || 30);
-  let H = top;
-  rows.forEach(r => { H += r.tipo === "cab" ? headH : rowH; });
-  H += 8;
+  const stack = narrow;                                   // celular: nome acima dos pontos
+  const fam = getComputedStyle(document.body).fontFamily;
+  const F_NOME = `400 14px ${fam}`, F_COD = `700 13px ${fam}`, F_CAB = `700 14px ${fam}`, LH = 18;
+  const colRef = opts.valores ? (narrow ? 64 : 92) : 0;
+  const labW = stack ? 0 : Math.min(opts.lab || 300, Math.round(W * (opts.labFrac || 0.42)));
+  const right = 16, top = 30;
+  // coluna dos nomes: alinhada depois do código mais largo (+ alerta)
+  const codW = Math.max(0, ...rows.filter(r => r.code).map(r => medirTexto(r.code, F_COD) + (r.warn ? 16 : 0)));
+  const xNome = rows.some(r => r.code) ? 4 + codW + 10 : 4;
+  const largNome = (stack ? W - right : labW - 8) - xNome;
+  // altura de cada linha conforme o número de linhas do nome
+  for (const r of rows) {
+    if (r.tipo === "cab") { r._l = quebrar(r.label, W - right, F_CAB); r._h = r._l.length * LH + 14; continue; }
+    r._l = quebrar(r.label, largNome, F_NOME);
+    r._h = stack ? r._l.length * LH + (opts.valores ? 44 : 30) : Math.max(opts.rowH || 30, r._l.length * LH + 12);   // + espaço para o valor acima da bolha
+  }
+  const H = top + rows.reduce((t, r) => t + r._h, 0) + 8;
   // escala ajustada aos dados (de 10 em 10 pontos), para separar os pontos
   const todos = rows.flatMap(r => r.tipo === "lin" ? ["mun", "UF", "BR"].map(n => r.vals[n]?.pct).filter(v => v != null) : []);
   const lo = Math.max(0, Math.floor((Math.min(...todos) - 0.03) * 10) / 10);
   const hi = Math.min(1, Math.ceil((Math.max(...todos) + 0.03) * 10) / 10);
-  const x0 = labW + (stack ? 4 : 8), x1 = W - right;
+  const x0 = labW + (stack ? 8 : 12), x1 = W - right - colRef - (opts.valores ? (stack ? 52 : 12) : 0);   // no celular, reserva lugar para o rótulo
   const X = v => x0 + (x1 - x0) * (v - lo) / (hi - lo);
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.aria });
 
@@ -331,36 +353,31 @@ function dotPlot(container, rows, opts) {
     el("line", { x1: X(t), x2: X(t), y1: top - 6, y2: H - 4 }, g);
     const tk = el("g", { class: "tick" }, svg);
     const ancora = X(t) < 16 ? "start" : X(t) > W - 16 ? "end" : "middle";
-    const tx = el("text", { x: X(t), y: top - 12, "text-anchor": ancora }, tk);
+    const tx = el("text", { x: X(t), y: top - 14, "text-anchor": ancora }, tk);
     tx.textContent = Math.round(t * 100) + "%";
+  }
+  if (opts.valores) {
+    const tx = el("text", { x: W - right, y: top - 14, "text-anchor": "end", class: "col-ref" }, svg);
+    tx.textContent = `vs ${refCurto()}`;
   }
 
   let y = top;
   for (const r of rows) {
     if (r.tipo === "cab") {
-      const t = el("text", { x: 0, y: y + 20, class: "topic-label" }, svg);
-      t.textContent = narrow && r.label.length > 44 ? r.label.slice(0, 42) + "…" : r.label;
-      y += headH; continue;
+      const t = el("text", { x: 0, y: y + 22, class: "topic-label" }, svg);
+      r._l.forEach((l, k) => { const s = el("tspan", { x: 0, dy: k ? LH : 0 }, t); s.textContent = l; });
+      y += r._h; continue;
     }
-    const cy = stack ? y + rowH - 12 : y + rowH / 2;
-    const hit = el("rect", { x: 0, y, width: W, height: rowH, rx: 6, class: "row-hit" + (opts.selected === r.id ? " sel" : "") }, svg);
-    // rótulo
-    const lab = el("text", { x: 4, y: stack ? y + 15 : cy + 4 }, svg);
+    const cy = stack ? y + r._h - 12 : y + r._h / 2;
+    const hit = el("rect", { x: 0, y, width: W, height: r._h, rx: 6, class: "row-hit" + (opts.selected === r.id ? " sel" : "") }, svg);
+    // rótulo: código (+ alerta) e nome em várias linhas
+    const y1 = stack ? y + 18 : cy + 5 - (r._l.length - 1) * LH / 2;
     if (r.code) {
-      const c = el("tspan", { class: "code" }, lab); c.textContent = r.code;
-      if (r.warn) {     // ícone de alerta logo depois do código (largura medida na fonte da página)
-        const fonte = `600 12px ${getComputedStyle(document.body).fontFamily}`;
-        el("use", { href: "#i-alerta", x: 4 + medirTexto(r.code, fonte) + 4, y: (stack ? y + 15 : cy + 4) - 10, width: 11, height: 11, class: "warn-ic" }, svg);
-      }
-      if (!narrow && r.label) {
-        const maxCh = Math.floor((labW - 56) / 6.4);
-        const s = el("tspan", { x: 52 }, lab);
-        s.textContent = r.label.length > maxCh ? r.label.slice(0, maxCh - 1) + "…" : r.label;
-      }
-    } else {
-      const maxCh = stack ? 60 : Math.floor((labW - 8) / 6.6);
-      lab.textContent = r.label.length > maxCh ? r.label.slice(0, maxCh - 1) + "…" : r.label;
+      const c = el("text", { x: 4, y: y1, class: "code" }, svg); c.textContent = r.code;
+      if (r.warn) el("use", { href: "#i-alerta", x: 4 + medirTexto(r.code, F_COD) + 4, y: y1 - 10, width: 11, height: 11, class: "warn-ic" }, svg);
     }
+    const nome = el("text", { x: xNome, y: y1, class: "nome" }, svg);
+    r._l.forEach((l, k) => { const s = el("tspan", { x: xNome, dy: k ? LH : 0 }, nome); s.textContent = l; });
     // faixa entre min e max
     const vs = ["mun", "UF", "BR"].map(n => r.vals[n]?.pct).filter(v => v != null);
     if (vs.length > 1) el("line", { x1: X(Math.min(...vs)), x2: X(Math.max(...vs)), y1: cy, y2: cy, class: "rng" }, svg);
@@ -381,14 +398,37 @@ function dotPlot(container, rows, opts) {
         }, svg);
       }
     }
+    if (opts.valores && r.vals.mun?.pct != null) {
+      // valor do município do lado livre da bolha (fora da faixa estado–Brasil; no meio, acima)
+      const m = r.vals.mun.pct, outros = ["UF", "BR"].map(n => r.vals[n]?.pct).filter(v => v != null);
+      let lado = !outros.length || m >= Math.max(...outros) ? 1 : m <= Math.min(...outros) ? -1 : 0;
+      const wTxt = medirTexto(fmtPct(m), F_COD) + 13;
+      if (lado > 0 && X(m) + wTxt > x1 + 8) lado = X(m) - wTxt > x0 - 8 && m <= Math.min(...outros, m) ? -1 : 0;   // sem espaço à direita
+      if (lado < 0 && X(m) - wTxt < x0 - 8) lado = 0;                                                            // sem espaço à esquerda
+      const t = el("text", { x: X(m) + lado * 13, y: lado ? cy + 4.5 : cy - 12, "text-anchor": lado > 0 ? "start" : lado < 0 ? "end" : "middle", class: "val-mun" }, svg);
+      t.textContent = fmtPct(m);
+      // coluna "vs referência"
+      const ref = r.vals[st.ref]?.pct;
+      if (ref != null) {
+        const d = (m - ref) * 100, forte = Math.abs(d) >= LIMIAR_PP;
+        const tv = el("text", { x: W - right, y: cy + 4.5, "text-anchor": "end", class: "dif" + (forte ? (d < 0 ? " neg" : " pos") : "") }, svg);
+        tv.textContent = fmtPP(d);
+        if (forte) el("use", { href: `#i-${d < 0 ? "desce" : "sobe"}`, x: W - right - medirTexto(fmtPP(d), F_COD) - 15, y: cy - 6, width: 12, height: 12, class: "dif-ic" + (d < 0 ? " neg" : " pos") }, svg);
+      }
+    }
     hit.addEventListener("mousemove", e => showTip(e, r.tip));
     hit.addEventListener("mouseleave", hideTip);
     if (opts.onClick) hit.addEventListener("click", () => { hideTip(); opts.onClick(r.id); });
     // trazer hit para frente sem cobrir pontos visualmente (transparente)
     svg.appendChild(hit);
-    y += rowH;
+    y += r._h;
   }
   container.appendChild(svg);
+  // o eixo dá zoom na faixa dos dados: dizer isso
+  const nota = document.createElement("p");
+  nota.className = "note eixo-nota";
+  nota.textContent = `O eixo vai de ${Math.round(lo * 100)}% a ${Math.round(hi * 100)}%, a faixa dos dados, e não de 0% a 100%.`;
+  container.appendChild(nota);
 }
 
 /* ---------- 1. resumo ---------- */
@@ -470,7 +510,7 @@ function renderTopicos(ds) {
       tip: `<b>${esc(topico)}</b><div class="d">${lista.length} descritores · ${nItens} itens</div>${tipLinhas(vals)}`,
     });
   }
-  dotPlot($("ch-topicos"), rows, { lab: 420, stackNarrow: true, rowH: 34, aria: "Acerto por tópico: município, estado e Brasil" });
+  dotPlot($("ch-topicos"), rows, { lab: 420, rowH: 36, valores: true, aria: "Acerto por tópico: município, estado e Brasil" });
 }
 
 /* ---------- 4. descritores ---------- */
@@ -489,7 +529,7 @@ function renderDescritores(ds) {
     }
   }
   dotPlot($("ch-desc"), rows, {
-    lab: 340, labNarrow: 60, rowH: 28, selected: st.desc,
+    lab: 460, labFrac: 0.52, rowH: 30, selected: st.desc,
     aria: "Acerto por descritor: município, estado e Brasil",
     onClick: selecionar,
   });

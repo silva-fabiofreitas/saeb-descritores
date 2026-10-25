@@ -34,4 +34,4 @@ Fonte de verdade para cores, fontes, espaçamentos e gráficos:
 
 ## Pendências
 
-- Gráficos da v2 ainda não aplicados: pontos de atenção como gráfico divergente único; formas por série (losango para estado, círculo menor para Brasil); nomes de descritor sem reticências no gráfico de pontos; valor do município ao lado da bolha e coluna "vs referência"; nota de zoom do eixo.
+- Os SVGs da logo no design system (asset store do artifact) ainda estão no azul antigo; os de `assets/brand/` já foram atualizados.
