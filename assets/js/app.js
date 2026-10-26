@@ -983,13 +983,14 @@ function renderDetalheUF(L, br, ind, ds) {
       const u = valPre(`U${r.u.id}`, d.cod), b = valPre("BR", d.cod);
       return { d, dif: u && b ? (u.pct - b.pct) * 100 : null };
     }).filter(x => x.dif != null);
-    const item = x => `<li><button type="button" data-cod="${esc(x.d.cod)}" title="${esc(x.d.descricao || "")}">
-        <span class="c">${esc(x.d.cod)}</span><span class="t">${esc(x.d.descricao || "(descrição não disponível)")}</span>
-        <span class="v ${x.dif < 0 ? "delta-neg" : "delta-pos"}">${fmtPP(x.dif)}</span></button></li>`;
+    // etiquetas compactas (código + diferença; nome no title): a lista completa com nomes é a tabela "Descritores de …" logo abaixo
+    const item = x => `<button type="button" class="etq ${x.dif < 0 ? "delta-neg" : "delta-pos"}" data-cod="${esc(x.d.cod)}"
+        title="${esc(x.d.cod)}: ${esc(x.d.descricao || "(descrição não disponível)")}" aria-label="${esc(x.d.cod)}, ${fmtPP(x.dif)}: ${esc(x.d.descricao || "")}">
+        <b>${esc(x.d.cod)}</b>${fmtPP(x.dif)}</button>`;
     const neg = ds_.filter(x => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, 3);
     const pos = ds_.filter(x => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, 3);
-    listas = `<h3 class="delta-neg">${ic("desce")}Mais abaixo do Brasil</h3><ul class="rank">${neg.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>
-      <h3 class="delta-pos">${ic("sobe")}Mais acima do Brasil</h3><ul class="rank">${pos.map(item).join("") || `<li class="empty">Nenhum.</li>`}</ul>`;
+    listas = `<h3 class="delta-neg">${ic("desce")}Mais abaixo do Brasil</h3><div class="etqs">${neg.map(item).join("") || `<span class="empty">Nenhum.</span>`}</div>
+      <h3 class="delta-pos">${ic("sobe")}Mais acima do Brasil</h3><div class="etqs">${pos.map(item).join("") || `<span class="empty">Nenhum.</span>`}</div>`;
   }
   box.innerHTML = `
     <div class="eyebrow">Estado selecionado</div>
@@ -1008,7 +1009,7 @@ function renderDetalheUF(L, br, ind, ds) {
     </div>
     ${listas}
     <button class="btn" type="button" id="e-ir-painel">Ver os municípios de ${esc(r.u.nome)}${ic("seta")}</button>`;
-  box.querySelectorAll(".rank button").forEach(b => b.onclick = () => { st.ind = b.dataset.cod; render(); });
+  box.querySelectorAll(".etq").forEach(b => b.onclick = () => { st.ind = b.dataset.cod; render(); });
   $("e-ir-painel").onclick = async () => {
     st.uf = r.u.id; st.mun = null; $("f-uf").value = st.uf;
     await carregarUF(st.uf);

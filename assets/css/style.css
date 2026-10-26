@@ -246,6 +246,14 @@ i.menor { transform: scale(.8); }
 .blocos i.neg { background: var(--bad); }
 .detail h3.delta-neg, .detail h3.delta-pos { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
 .detail h3.delta-neg, .detail h3.delta-pos { margin-top: 16px; }
+.etqs { display: flex; flex-wrap: wrap; gap: 6px; }
+.etq {
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; min-height: 44px;
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.etq b { color: var(--ink); font-weight: 700; }
+.etq:hover, .etq:focus-visible { background: var(--accent-wash); border-color: var(--axis); }
 .rank { list-style: none; margin: 0; padding: 0; }
 .rank li + li { border-top: 1px solid var(--grid); }
 .rank button {
