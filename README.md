@@ -4,11 +4,11 @@ Página estática que mostra o percentual de acerto por descritor
 da Matriz de Referência do Saeb, em Língua Portuguesa e Matemática, para os
 municípios de todo o Brasil, comparando cada um com o seu estado e com o país.
 
-A página tem duas telas:
+A página tem três telas:
 
-* **Painel** (`index.html#painel`): resumo do município, pontos de atenção,
+* **Estados** (`index.html#estados`, tela inicial): mapa de gradação (coroplético) dos 27 estados, ranking, mapa de calor estado × descritor e tabela. O indicador pode ser o acerto geral, um tópico ou um descritor, em % de acerto ou diferença para o Brasil. Usa ECharts (carregado do cdnjs só quando a aba abre).
+* **Município** (`index.html#painel`): resumo do município, pontos de atenção,
   acerto por tópico, acerto por descritor com painel de detalhe e tabela completa;
-* **Estados** (`index.html#estados`): mapa de gradação (coroplético) dos 27 estados, ranking, mapa de calor estado × descritor e tabela. O indicador pode ser o acerto geral, um tópico ou um descritor, em % de acerto ou diferença para o Brasil. Usa ECharts (carregado do cdnjs só quando a aba abre).
 * **Metodologia** (`index.html#metodologia`): como ler o painel, regras de cálculo e downloads.
 
 Downloads (gerados no navegador, CSV com `;` que abre direto no Excel):

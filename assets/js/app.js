@@ -111,7 +111,9 @@ function indexar() {
 /* ---------- telas ---------- */
 function rota() {
   const h = location.hash;
-  const view = h === "#estados" ? "estados" : h.startsWith("#m") ? "metodologia" : "painel";
+  // tela inicial: Estados. Links antigos sem "#" mas com município (?mun=…) continuam abrindo na aba Município
+  const legado = !h && new URLSearchParams(location.search).has("mun");
+  const view = h === "#painel" || legado ? "painel" : h.startsWith("#m") ? "metodologia" : "estados";
   const sec = view === "metodologia" && h !== "#metodologia" ? h : null;   // âncora interna da metodologia
   for (const v of ["painel", "estados", "metodologia"]) $("v-" + v).hidden = v !== view;
   document.querySelectorAll(".tabs a").forEach(a =>
